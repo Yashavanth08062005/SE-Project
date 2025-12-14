@@ -97,20 +97,33 @@ app.post('/api/login', async (req, res) => {
    SAVE STATE
 ========================= */
 app.post('/api/state/save', async (req, res) => {
-    const { userId, mySkills, peers } = req.body;
+    const { userId, mySkills, peers, profile } = req.body;
 
     try {
         if (!userId) return res.status(400).json({ error: "Missing userId" });
+
+        // Update profile in users table
+        if (profile) {
+            await db.query(
+                'UPDATE users SET name=$1, meta=$2, company=$3, avatar=$4 WHERE id=$5',
+                [profile.name, profile.meta, JSON.stringify(profile.companies || []), profile.avatar, userId]
+            );
+        }
 
         // clear old data
         await db.query('DELETE FROM skills WHERE user_id=$1', [userId]);
         await db.query('DELETE FROM peers WHERE user_id=$1', [userId]);
 
         // save skills
-        for (const skill of mySkills) {
+        // save skills
+        for (const s of mySkills) {
+            // Support both string (legacy) and object
+            const skillName = typeof s === 'object' ? s.skill : s;
+            const skillCompany = typeof s === 'object' ? s.company : "";
+
             await db.query(
-                'INSERT INTO skills (user_id, skill) VALUES ($1,$2)',
-                [userId, skill]
+                'INSERT INTO skills (user_id, skill, company) VALUES ($1,$2,$3)',
+                [userId, skillName, skillCompany]
             );
         }
 
@@ -123,10 +136,13 @@ app.post('/api/state/save', async (req, res) => {
 
             const peerId = peerRes.rows[0].id;
 
-            for (const skill of peer.skills) {
+            for (const s of peer.skills) {
+                const skillName = typeof s === 'object' ? s.skill : s;
+                const skillCompany = typeof s === 'object' ? s.company : "";
+
                 await db.query(
-                    'INSERT INTO peer_skills (peer_id, skill) VALUES ($1,$2)',
-                    [peerId, skill]
+                    'INSERT INTO peer_skills (peer_id, skill, company) VALUES ($1,$2,$3)',
+                    [peerId, skillName, skillCompany]
                 );
             }
         }
@@ -145,8 +161,12 @@ app.get('/api/state/:userId', async (req, res) => {
     const { userId } = req.params;
 
     try {
+        // Fetch profile
+        const userRes = await db.query('SELECT name, meta, company, avatar FROM users WHERE id=$1', [userId]);
+        const userProfile = userRes.rows[0] || {};
+
         const skillsRes = await db.query(
-            'SELECT skill FROM skills WHERE user_id=$1',
+            'SELECT skill, company FROM skills WHERE user_id=$1',
             [userId]
         );
 
@@ -159,25 +179,68 @@ app.get('/api/state/:userId', async (req, res) => {
 
         for (const peer of peersRes.rows) {
             const skillRes = await db.query(
-                'SELECT skill FROM peer_skills WHERE peer_id=$1',
+                'SELECT skill, company FROM peer_skills WHERE peer_id=$1',
                 [peer.id]
             );
 
             peers.push({
                 name: peer.name,
                 company: peer.company,
-                skills: skillRes.rows.map(s => s.skill),
+                skills: skillRes.rows, // object {skill, company}
             });
         }
 
         res.json({
-            mySkills: skillsRes.rows.map(s => s.skill),
+            profile: {
+                name: userProfile.name || "",
+                meta: userProfile.meta || "",
+                // Try parse JSON, else fallback to string array or empty
+                companies: (() => {
+                    try { return JSON.parse(userProfile.company); }
+                    catch (e) { return userProfile.company ? [userProfile.company] : []; }
+                })(),
+                avatar: userProfile.avatar || ""
+            },
+            mySkills: skillsRes.rows, // Returns {skill, company} objects
             peers,
             resources: [],
         });
     } catch (err) {
         console.error("❌ Load Error:", err.message);
         res.status(500).json({ error: "Load failed" });
+    }
+});
+
+/* =========================
+   SEARCH USERS (for Peers)
+========================= */
+app.get('/api/users/search', async (req, res) => {
+    const { q } = req.query; // email/username
+    if (!q) return res.json(null);
+
+    try {
+        const userRes = await db.query(
+            'SELECT id, username, name, company FROM users WHERE LOWER(username) = LOWER($1)',
+            [q]
+        );
+
+        if (userRes.rows.length === 0) return res.json(null);
+
+        const user = userRes.rows[0];
+        // Get skills {skill, company}
+        const skillsRes = await db.query('SELECT skill, company FROM skills WHERE user_id=$1', [user.id]);
+
+        let companies = [];
+        try { companies = JSON.parse(user.company); } catch (e) { if (user.company) companies = [user.company]; }
+
+        res.json({
+            name: user.name || user.username,
+            company: companies, // Return array
+            skills: skillsRes.rows // Return objects
+        });
+    } catch (err) {
+        console.error("❌ Search Error:", err.message);
+        res.status(500).json({ error: "Search failed" });
     }
 });
 

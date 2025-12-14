@@ -16,7 +16,7 @@
 
   // state
   let state = {
-    profile: { name: "", meta: "", avatar: "" },
+    profile: { name: "", meta: "", avatar: "", companies: [] },
     mySkills: [],
     peers: [],
     resources: []
@@ -35,6 +35,7 @@
   }
 
   // Save state to DB
+
   async function saveState() {
     if (!currentUserId) {
       console.warn("[Client] saveState called but currentUserId is missing");
@@ -67,11 +68,14 @@
   function aggregateSkillCounts() {
     const counts = {};
     state.peers.forEach(p => (p.skills || []).forEach(s => {
-      const sk = normalizeSkill(s);
+      const name = typeof s === 'object' ? s.skill : s;
+      const sk = normalizeSkill(name);
       counts[sk] = (counts[sk] || 0) + 1;
     }));
     state.mySkills.forEach(s => {
-      const sk = normalizeSkill(s);
+      // Support object or string
+      const name = typeof s === 'object' ? s.skill : s;
+      const sk = normalizeSkill(name);
       counts[sk] = (counts[sk] || 0) + 1;
     });
     return counts;
@@ -100,24 +104,27 @@
   const mySkillsPfp = document.getElementById("mySkillsPfp");
   const mySkillsName = document.getElementById("mySkillsName");
   const mySkillsMeta = document.getElementById("mySkillsMeta");
+  const mySkillsCompany = document.getElementById("mySkillsCompany");
+  const myCompanyDisplay = document.getElementById("myCompanyDisplay");
+  const myCompanyInput = document.getElementById("myCompanyInput");
+  const updateDetailsBtn = document.getElementById("updateDetailsBtn");
   const mySkillsChangePhoto = document.getElementById("mySkillsChangePhoto");
   const mySkillsRemovePhoto = document.getElementById("mySkillsRemovePhoto");
   const mySkillsPhotoInput = document.getElementById("mySkillsPhotoInput");
 
   // skills
   const skillInput = document.getElementById("skillInput");
-  const addSkillBtn = document.getElementById("addSkillBtn");
   const mySkillsList = document.getElementById("mySkillsList");
 
   // peers
-  const peerName = document.getElementById("peerName");
-  const peerSkills = document.getElementById("peerSkills");
-  const peerCompany = document.getElementById("peerCompany");
+  const peerName = document.getElementById("peerName"); // No longer used for input, but might be legacy ref
+  const peerEmailInput = document.getElementById("peerEmailInput");
   const addPeerBtn = document.getElementById("addPeerBtn");
   const peerList = document.getElementById("peerList");
 
   // charts
   const trendingCtx = document.getElementById("trendingChart").getContext("2d");
+
   const companyCtx = document.getElementById("companyChart").getContext("2d");
   const domainCanvas = document.getElementById("domainChart");
   const domainCtx = domainCanvas ? domainCanvas.getContext("2d") : null;
@@ -178,6 +185,42 @@
     if (mySkillsPfp) mySkillsPfp.src = state.profile.avatar || "";
     if (mySkillsName) mySkillsName.textContent = state.profile.name || "Your Name";
     if (mySkillsMeta) mySkillsMeta.textContent = state.profile.meta || "";
+    if (mySkillsCompany) mySkillsCompany.textContent = (state.profile.companies || []).join(", ");
+
+    if (myCompanyDisplay) {
+      myCompanyDisplay.innerHTML = "";
+      const companies = state.profile.companies || [];
+
+      if (companies.length > 0) {
+        myCompanyDisplay.style.display = "block"; // Changed from inline-block to allow flex/block children
+        // Render each company as a tag
+        companies.forEach(comp => {
+          const tag = document.createElement("span");
+          tag.style.cssText = "display:inline-block; padding:4px 12px; background:#e0f2fe; color:#0369a1; border-radius:16px; font-weight:600; font-size:14px; margin-right:8px; margin-bottom:4px; cursor:pointer;";
+          tag.textContent = comp;
+          tag.title = "Click to remove " + comp;
+
+          tag.addEventListener("click", () => {
+            if (confirm(`Remove company "${comp}"? This will also remove associated skills.`)) {
+              state.profile.companies = state.profile.companies.filter(c => c !== comp);
+              // Remove linked skills
+              state.mySkills = state.mySkills.filter(s => {
+                if (typeof s === 'object') return s.company !== comp;
+                return true; // Keep unlinked (legacy) skills
+              });
+
+              saveState();
+              renderMySkillsProfileCard();
+              renderMySkills();
+              refreshAll();
+            }
+          });
+          myCompanyDisplay.appendChild(tag);
+        });
+      } else {
+        myCompanyDisplay.style.display = "none";
+      }
+    }
   }
 
   // avatar handling
@@ -238,17 +281,34 @@
     refreshAll();
   });
 
+  // My Company handlers
+  myCompanyDisplay && myCompanyDisplay.addEventListener("click", () => {
+    if (confirm(`Remove company "${state.profile.company}"? This will also remove ALL your skills.`)) {
+      state.profile.company = "";
+      state.mySkills = []; // Clear all skills
+      if (myCompanyInput) myCompanyInput.value = "";
+      saveState();
+      renderMySkillsProfileCard();
+      renderMySkills(); // Refresh skills list (to empty)
+      refreshAll();
+    }
+  });
+
+
   // my skills
   function renderMySkills() {
     mySkillsList.innerHTML = "";
     (state.mySkills || []).forEach((s, idx) => {
       const li = document.createElement("li");
-      li.textContent = s;
+      const name = typeof s === 'object' ? s.skill : s;
+      const comp = typeof s === 'object' ? s.company : "";
+
+      li.innerHTML = `<span>${escapeHtml(name)}</span>${comp ? `<small style='margin-left:6px;opacity:0.6'>(${escapeHtml(comp)})</small>` : ''}`;
       li.dataset.idx = idx;
       li.title = "Click to remove";
       li.style.cursor = "pointer";
       li.addEventListener("click", () => {
-        if (confirm(`Remove skill "${s}" from your profile?`)) {
+        if (confirm(`Remove skill "${name}"?`)) {
           state.mySkills.splice(idx, 1);
           saveState();
           renderMySkills();
@@ -259,34 +319,98 @@
     });
   }
 
-  addSkillBtn && addSkillBtn.addEventListener("click", () => {
-    const raw = skillInput.value;
-    if (!raw.trim()) return;
-    const normalized = normalizeSkill(raw);
-    if (!state.mySkills.includes(normalized)) {
-      state.mySkills.push(normalized);
-      saveState();
-      skillInput.value = "";
-      renderMySkills();
-      refreshAll();
-    } else {
-      alert("You already have this skill.");
+  updateDetailsBtn && updateDetailsBtn.addEventListener("click", () => {
+    // 1. Update Companies List
+    const companyVal = myCompanyInput.value.trim();
+    if (companyVal) {
+      // Add if not exists
+      state.profile.companies = state.profile.companies || [];
+      if (!state.profile.companies.includes(companyVal)) {
+        state.profile.companies.push(companyVal);
+      }
     }
+
+    // 2. Add Skills (comma separated)
+    const raw = skillInput.value;
+    if (raw.trim()) {
+      const skillsToAdd = raw.split(",").map(s => normalizeSkill(s)).filter(Boolean);
+      let addedCount = 0;
+
+      skillsToAdd.forEach(sk => {
+        // Check if skill already exists?
+        const exists = state.mySkills.some(existing => {
+          const eName = typeof existing === 'object' ? existing.skill : existing;
+          return eName === sk;
+        });
+
+        if (!exists) {
+          state.mySkills.push({ skill: sk, company: companyVal });
+          addedCount++;
+        }
+      });
+
+      if (addedCount > 0) {
+        skillInput.value = ""; // Clear input if at least one skill added
+      }
+    }
+
+    // Save and Refresh
+    saveState();
+    renderMySkills();
+    renderMySkillsProfileCard(); // Update profile card company display
+    refreshAll();
   });
 
   // peers
-  addPeerBtn && addPeerBtn.addEventListener("click", () => {
-    const name = peerName.value.trim();
-    const skillsText = peerSkills.value.trim();
-    const company = peerCompany.value.trim();
-    if (!skillsText) { alert("Please add at least one skill (comma separated)"); return; }
-    const skills = skillsText.split(",").map(s => normalizeSkill(s)).filter(Boolean);
-    state.peers.push({ name: name || "", skills, company });
-    saveState();
-    peerName.value = peerSkills.value = peerCompany.value = "";
-    renderPeerList();
-    refreshAll();
-    showPage("peers");
+  addPeerBtn && addPeerBtn.addEventListener("click", async () => {
+    const email = peerEmailInput.value.trim();
+    if (!email) { alert("Please enter an email"); return; }
+
+    // Call API to search user
+    try {
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(email)}`);
+      const data = await res.json();
+
+      if (!data) {
+        alert("User not found via email/username.");
+        return;
+      }
+
+      // Add to peer list
+      const name = data.name || email;
+      const skills = data.skills || [];
+      // Flatten company array to JSON string for peer storage (simplified)
+      let companyVals = data.company || [];
+      if (!Array.isArray(companyVals)) companyVals = [companyVals];
+      const company = JSON.stringify(companyVals);
+
+      // Check duplicate?
+      const exists = state.peers.some(p => p.name === name);
+
+      if (exists) {
+        alert("Peer already exists in your list.");
+        return;
+      }
+
+      state.peers.push({ name, skills, company });
+
+      try {
+        await saveState();
+
+        peerEmailInput.value = "";
+        renderPeerList();
+        refreshAll();
+        showPage("peers");
+      } catch (saveErr) {
+        console.error("Save failed:", saveErr);
+        state.peers.pop();
+        alert("Failed to save peer.");
+      }
+
+    } catch (e) {
+      console.error(e);
+      alert("Error searching user");
+    }
   });
 
   function renderPeerList() {
@@ -295,14 +419,28 @@
       const div = document.createElement("div");
       div.className = "peer-item";
       const name = p.name || `Peer ${i + 1}`;
-      const skillsHtml = (p.skills || []).map(s => `<span style="display:inline-block;background:#eef2ff;padding:4px 8px;border-radius:6px;margin-right:6px">${escapeHtml(s)}</span>`).join("");
+      const skillsHtml = (p.skills || []).map(s => {
+        const name = typeof s === 'object' ? s.skill : s;
+        const comp = typeof s === 'object' ? s.company : "";
+        const tip = comp ? `title="${escapeHtml(comp)}"` : "";
+        const label = escapeHtml(name);
+        return `<span ${tip} style="display:inline-block;background:#eef2ff;padding:4px 8px;border-radius:6px;margin-right:6px;cursor:default">${label}</span>`;
+      }).join("");
+
+      // Parse company (JSON string or simple string)
+      let comStr = p.company || '';
+      try {
+        const cArr = JSON.parse(p.company);
+        if (Array.isArray(cArr)) comStr = cArr.join(", ");
+      } catch (e) { }
+
       div.innerHTML = `
         <div style="flex:0 0 auto; width:44px; height:44px; border-radius:8px; background:#f3f6fb; display:flex;align-items:center;justify-content:center;color:#0f172a;font-weight:600">
           ${(name[0] || 'P').toUpperCase()}
         </div>
         <div style="flex:1">
           <strong>${escapeHtml(name)}</strong>
-          <div class="peer-meta">${escapeHtml(p.company || '')}</div>
+          <div class="peer-meta">${escapeHtml(comStr)}</div>
           <div style="margin-top:8px">${skillsHtml}</div>
         </div>
         <div style="flex:0 0 auto; display:flex; flex-direction:column; gap:8px">
@@ -356,6 +494,8 @@
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
 
+
+
     companyChart = new Chart(companyCtx, {
       type: "bar",
       data: { labels: [], datasets: [{ label: "Internship Count", data: [], backgroundColor: '#0f62fe' }] },
@@ -385,6 +525,16 @@
     trendingChart.data.labels = top.map(t => t[0]);
     trendingChart.data.datasets[0].data = top.map(t => t[1]);
     trendingChart.update();
+
+    // timeline
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+    timelineChart.data.labels = months;
+    const trend = months.map((m, idx) => {
+      const weight = top.reduce((acc, t) => acc + t[1], 0);
+      return Math.max(1, Math.round(weight * (0.3 + idx * 0.15)));
+    });
+    timelineChart.data.datasets[0].data = trend;
+    timelineChart.update();
 
     // Companies - only non-empty companies counted
     const compCounts = {};
@@ -429,7 +579,9 @@
   // Skill gap
   function computeGap() {
     const counts = aggregateSkillCounts();
-    const userSet = new Set((state.mySkills || []).map(s => normalizeSkill(s)));
+    const userSet = new Set((state.mySkills || []).map(s => {
+      return typeof s === 'object' ? normalizeSkill(s.skill) : normalizeSkill(s);
+    }));
     const arr = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     const gap = arr.filter(([skill]) => !userSet.has(skill));
     return { all: arr, gap };
@@ -457,7 +609,10 @@
     compareTableBody.innerHTML = "";
     all.forEach(([skill, count]) => {
       const tr = document.createElement("tr");
-      const have = state.mySkills.includes(skill) ? "Yes" : "No";
+      const have = state.mySkills.some(s => {
+        const name = typeof s === 'object' ? s.skill : s;
+        return normalizeSkill(name) === skill;
+      }) ? "Yes" : "No";
       tr.innerHTML = `<td>${escapeHtml(skill)}</td><td>${count}</td><td>${have}</td>`;
       compareTableBody.appendChild(tr);
     });
@@ -593,6 +748,7 @@
   let isRegistering = false;
   let currentUser = localStorage.getItem("psi_user");
   let currentUserId = localStorage.getItem("psi_user_id");
+  if (currentUserId === "undefined") currentUserId = null;
 
   authSwitch.addEventListener("click", () => {
     isRegistering = !isRegistering;
@@ -615,7 +771,7 @@
 
     // Email validation
     // Format: Starts with "01fe", ends with "@kletech.ac.in"
-    const emailRegex = /^01fe.*@kletech\.ac\.in$/i;
+    const emailRegex = /^01fe.*@kletech\.ac\.in$/;
     if (!emailRegex.test(username)) {
       authMsg.textContent = "Email must start with '01fe' and end with '@kletech.ac.in'";
       return;
@@ -684,6 +840,7 @@
 
     window.addEventListener('resize', () => {
       if (trendingChart) trendingChart.resize();
+
       if (companyChart) companyChart.resize();
       if (domainChart) domainChart.resize();
     });

@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<<<<<<< HEAD
 
-=======
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -14,10 +11,7 @@
 
   <link rel="stylesheet" href="style.css" />
 </head>
-<<<<<<< HEAD
 
-=======
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
 <body>
   <div class="app">
     <!-- Top horizontal nav -->
@@ -35,43 +29,16 @@
         <button data-page="internships" class="nav-btn">Internships</button>
         <button data-page="resources" class="nav-btn">Resource Recommendations</button>
         <button data-page="profile" class="nav-btn">Profile</button>
-<<<<<<< HEAD
         <button id="logoutBtn" class="nav-btn"
           style="margin-left:auto; background:rgba(255,255,255,0.1)">Logout</button>
       </nav>
 
       <!-- removed extra Resources button per request -->
-=======
-        <button id="logoutBtn" class="nav-btn topbar-logout" style="display:none;">Logout</button>
-      </nav>
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
     </header>
 
     <main class="main">
       <section id="pages">
 
-<<<<<<< HEAD
-=======
-        <!-- Login Page -->
-        <section id="login" class="page">
-          <div class="login-card">
-            <h3>Sign in</h3>
-            <div class="login-grid">
-              <label>Username</label>
-              <input id="loginUsername" placeholder="Username" autocomplete="username" />
-
-              <label>Password</label>
-              <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
-
-              <div class="login-actions">
-                <button id="loginBtn" class="action">Login</button>
-              </div>
-              <div id="loginMsg" class="muted"></div>
-            </div>
-          </div>
-        </section>
-
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
         <!-- Dashboard -->
         <section id="dashboard" class="page active">
           <h2>Dashboard</h2>
@@ -81,11 +48,8 @@
               <canvas id="trendingChart"></canvas>
             </div>
 
-<<<<<<< HEAD
             <!-- Removed Timeline Chart -->
 
-=======
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
             <div class="card">
               <h3>Top Companies (Internships)</h3>
               <canvas id="companyChart"></canvas>
@@ -107,6 +71,8 @@
                 <div>
                   <div><strong id="mySkillsName"></strong></div>
                   <div id="mySkillsMeta" class="muted" style="font-size:13px"></div>
+                  <div id="mySkillsCompany"
+                    style="font-size:13px; font-weight:600; margin-top:2px; color:var(--primary)"></div>
 
                   <div style="margin-top:10px;display:flex;gap:8px;">
                     <button id="mySkillsChangePhoto" type="button" class="action secondary">Change Photo</button>
@@ -114,6 +80,15 @@
                   </div>
 
                   <input type="file" id="mySkillsPhotoInput" accept="image/*" style="display:none;">
+                </div>
+              </div>
+
+              <div style="margin-top:16px; border-top:1px solid #eee; padding-top:12px;">
+                <label style="font-size:13px; font-weight:600;">My Company / Internship</label>
+                <div style="display:flex; gap:8px; margin-top:4px;">
+                  <input id="myCompanyInput" placeholder="e.g. Google" style="flex:1" />
+                  <button id="saveCompanyBtn" class="action secondary">Update</button>
+                  <button id="removeCompanyBtn" class="action secondary" style="color:red; border-color:red;">X</button>
                 </div>
               </div>
 
@@ -143,7 +118,6 @@
           <div class="card">
             <h3>Detailed Comparison</h3>
             <table id="compareTable">
-<<<<<<< HEAD
               <thead>
                 <tr>
                   <th>Skill</th>
@@ -151,9 +125,6 @@
                   <th>You have it?</th>
                 </tr>
               </thead>
-=======
-              <thead><tr><th>Skill</th><th>Peer Count</th><th>You have it?</th></tr></thead>
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
               <tbody></tbody>
             </table>
           </div>
@@ -163,21 +134,17 @@
         <section id="peers" class="page">
           <h2>Peer Insights</h2>
           <div class="card">
-            <h3>Add Peer Entry (for demo/collection)</h3>
-            <form id="peerForm" onsubmit="return false;">
-              <input id="peerName" placeholder="Name or handle (optional)" />
-              <input id="peerSkills" placeholder="Comma-separated skills (e.g. Java,SQL,React)" />
-              <input id="peerCompany" placeholder="Company/Internship (optional)" />
-              <div style="margin-top:8px">
-                <button id="addPeerBtn" class="action">Add Peer</button>
-              </div>
-<<<<<<< HEAD
-              <div class="small" style="margin-top:6px">Tip: Leave company blank if unknown — it won't appear in
-                Internship stats until added.</div>
-=======
-              <div class="small" style="margin-top:6px">Tip: Leave company blank if unknown — it won't appear in Internship stats until added.</div>
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
-            </form>
+            <div class="card">
+              <h3>Add Peer Entry (from Database)</h3>
+              <form id="peerForm" onsubmit="return false;">
+                <input id="peerEmailInput" placeholder="Enter Peer Email (e.g. 01fe...@kletech.ac.in)" />
+                <div style="margin-top:8px">
+                  <button id="addPeerBtn" class="action">Add Peer</button>
+                </div>
+                <div class="small" style="margin-top:6px">Tip: Enter the email of a registered user to add them to your
+                  peer list. Their company and skills will be fetched automatically.</div>
+              </form>
+            </div>
           </div>
 
           <div class="card">
@@ -207,17 +174,12 @@
 
           <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
             <input id="resourceSearch" placeholder="Search resources, skill, peer, note..." style="flex:1" />
-<<<<<<< HEAD
             <select id="filterSkill">
               <option value="">All Skills</option>
             </select>
             <select id="filterPeer">
               <option value="">All Peers</option>
             </select>
-=======
-            <select id="filterSkill"><option value="">All Skills</option></select>
-            <select id="filterPeer"><option value="">All Peers</option></select>
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
             <button id="resetFilters" class="action secondary">Reset</button>
           </div>
 
@@ -255,7 +217,6 @@
     </main>
   </div>
 
-<<<<<<< HEAD
   <!-- Auth Screen -->
   <div id="authScreen" class="auth-screen">
     <div class="auth-card">
@@ -272,8 +233,6 @@
     </div>
   </div>
 
-=======
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856
   <!-- Peer resource modal (hidden by default) -->
   <div id="resourceModal" class="modal" style="display:none">
     <div class="modal-content">
@@ -298,9 +257,5 @@
 
   <script src="script.js"></script>
 </body>
-<<<<<<< HEAD
 
 </html>
-=======
-</html>
->>>>>>> 778b5aeffcfb5f89c2fe2a0fcb72fa0d0d4cf856

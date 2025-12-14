@@ -71,6 +71,8 @@
                 <div>
                   <div><strong id="mySkillsName"></strong></div>
                   <div id="mySkillsMeta" class="muted" style="font-size:13px"></div>
+                  <div id="mySkillsCompany"
+                    style="font-size:13px; font-weight:600; margin-top:2px; color:var(--primary)"></div>
 
                   <div style="margin-top:10px;display:flex;gap:8px;">
                     <button id="mySkillsChangePhoto" type="button" class="action secondary">Change Photo</button>
@@ -81,16 +83,33 @@
                 </div>
               </div>
 
+
+
             </div>
 
             <div class="card">
               <h3>Add / Remove Skills</h3>
               <form id="skillForm" onsubmit="return false;">
-                <input id="skillInput" placeholder="e.g. Python" />
-                <button id="addSkillBtn" class="action">Add Skill</button>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">My Company /
+                  Internship</label>
+                <input id="myCompanyInput" placeholder="e.g. Google" style="margin-bottom:8px;" />
+
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Add New Skill</label>
+                <div style="display:flex; gap:8px;">
+                  <input id="skillInput" placeholder="e.g. Python" style="flex:1" />
+                </div>
+
+                <div style="margin-top:10px">
+                  <button id="updateDetailsBtn" class="action">Update Details</button>
+                </div>
               </form>
-              <div>
-                <h4>Your skills</h4>
+              <div style="margin-top:24px">
+                <h4>Your Company</h4>
+                <div id="myCompanyDisplay" class="tag-list"
+                  style="display:inline-block; padding:4px 12px; background:#e0f2fe; color:#0369a1; border-radius:16px; font-weight:600; font-size:14px; display:none;">
+                </div>
+
+                <h4 style="margin-top:16px">Your skills</h4>
                 <ul id="mySkillsList" class="tag-list"></ul>
               </div>
             </div>
@@ -123,17 +142,17 @@
         <section id="peers" class="page">
           <h2>Peer Insights</h2>
           <div class="card">
-            <h3>Add Peer Entry (for demo/collection)</h3>
-            <form id="peerForm" onsubmit="return false;">
-              <input id="peerName" placeholder="Name or handle (optional)" />
-              <input id="peerSkills" placeholder="Comma-separated skills (e.g. Java,SQL,React)" />
-              <input id="peerCompany" placeholder="Company/Internship (optional)" />
-              <div style="margin-top:8px">
-                <button id="addPeerBtn" class="action">Add Peer</button>
-              </div>
-              <div class="small" style="margin-top:6px">Tip: Leave company blank if unknown — it won't appear in
-                Internship stats until added.</div>
-            </form>
+            <div class="card">
+              <h3>Add Peer Entry (from Database)</h3>
+              <form id="peerForm" onsubmit="return false;">
+                <input id="peerEmailInput" placeholder="Enter Peer Email (e.g. 01fe...@kletech.ac.in)" />
+                <div style="margin-top:8px">
+                  <button id="addPeerBtn" class="action">Add Peer</button>
+                </div>
+                <div class="small" style="margin-top:6px">Tip: Enter the email of a registered user to add them to your
+                  peer list. Their company and skills will be fetched automatically.</div>
+              </form>
+            </div>
           </div>
 
           <div class="card">
