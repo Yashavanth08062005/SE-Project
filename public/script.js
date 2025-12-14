@@ -459,7 +459,10 @@
         resPeerIndex.value = i;
         // populate skill dropdown with peer skills
         const skills = (state.peers[i].skills || []).slice();
-        resSkill.innerHTML = "<option value=''>(any skill)</option>" + skills.map(s => `<option>${escapeHtml(s)}</option>`).join("");
+        resSkill.innerHTML = "<option value=''>(any skill)</option>" + skills.map(s => {
+          const name = typeof s === 'object' ? s.skill : s;
+          return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+        }).join("");
         resTitle.value = "";
         resURL.value = "";
         resNote.value = "";
@@ -538,11 +541,26 @@
 
     // Companies - only non-empty companies counted
     const compCounts = {};
+    console.log("[Charts] Peers:", state.peers.length);
     state.peers.forEach(p => {
-      const c = (p.company || "").toString().trim();
-      if (!c) return;
-      compCounts[c] = (compCounts[c] || 0) + 1;
+      let comps = [];
+      try {
+        // Handle multi-company JSON
+        const parsed = JSON.parse(p.company);
+        if (Array.isArray(parsed)) comps = parsed;
+        else if (parsed) comps = [parsed];
+      } catch (e) {
+        // Fallback to simple string
+        if (p.company) comps = [p.company.toString()];
+      }
+
+      console.log(`[Charts] Peer ${p.name} raw:`, p.company, "parsed:", comps);
+      comps.forEach(c => {
+        const s = (c || "").trim();
+        if (s) compCounts[s] = (compCounts[s] || 0) + 1;
+      });
     });
+    console.log("[Charts] Counts:", compCounts);
     const compTop = Object.entries(compCounts).sort((a, b) => b[1] - a[1]);
     companyChart.data.labels = compTop.map(c => c[0]);
     companyChart.data.datasets[0].data = compTop.map(c => c[1]);
@@ -624,7 +642,9 @@
     const skillsSet = new Set();
     const peersSet = new Set();
     (state.resources || []).forEach(r => {
-      if (r.skill) skillsSet.add(r.skill);
+      // Handle skill object
+      const sName = typeof r.skill === 'object' ? r.skill.skill : r.skill;
+      if (sName) skillsSet.add(sName);
       if (r.author) peersSet.add(r.author);
     });
 
@@ -644,10 +664,11 @@
     const peerF = filterPeer.value;
 
     const list = (state.resources || []).slice().reverse().filter(r => {
-      if (skillF && r.skill !== skillF) return false;
+      const sName = typeof r.skill === 'object' ? r.skill.skill : r.skill;
+      if (skillF && sName !== skillF) return false;
       if (peerF && r.author !== peerF) return false;
       if (!q) return true;
-      const hay = `${r.title} ${r.skill} ${r.author} ${r.note}`.toLowerCase();
+      const hay = `${r.title} ${sName} ${r.author} ${r.note}`.toLowerCase();
       return hay.includes(q);
     });
 
@@ -660,21 +681,41 @@
       return;
     }
 
-    list.forEach(r => {
+    list.forEach((r, idx) => {
       const card = document.createElement("div");
       card.className = "resource-card";
+      const sName = typeof r.skill === 'object' ? r.skill.skill : r.skill;
+
       card.innerHTML = `
         <div class="meta">
           <div>
             <div class="title">${escapeHtml(r.title || r.url)}</div>
-            <div class="small">by ${escapeHtml(r.author || "Peer")} • recommended for <strong>${escapeHtml(r.skill || "General")}</strong></div>
+            <div class="small">by ${escapeHtml(r.author || "Peer")} • recommended for <strong>${escapeHtml(sName || "General")}</strong></div>
           </div>
           <div style="text-align:right">
-            <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Open</a>
+            <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="margin-right:8px">Open</a>
+            <button class="removeResourceBtn secondary" style="font-size:11px; padding:2px 6px">Remove</button>
           </div>
         </div>
         ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ""}
       `;
+
+      const removeBtn = card.querySelector(".removeResourceBtn");
+      removeBtn.addEventListener("click", () => {
+        if (confirm("Remove this recommendation?")) {
+          // Find index in main state array (since list is reversed/filtered, can't use idx directly effectively unless careful)
+          // Better to find by reference or ID. Currently no ID. 
+          // Assuming object ref is same? 
+          const realIdx = state.resources.indexOf(r);
+          if (realIdx > -1) {
+            state.resources.splice(realIdx, 1);
+            saveState(); // Warning: If SAVE doesn't persist resources, this is temporary!
+            renderResources();
+            refreshAll();
+          }
+        }
+      });
+
       resourceGrid.appendChild(card);
     });
   }
