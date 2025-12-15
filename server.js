@@ -97,9 +97,12 @@ app.post('/api/login', async (req, res) => {
    SAVE STATE
 ========================= */
 app.post('/api/state/save', async (req, res) => {
-    const { userId, mySkills, peers, profile } = req.body;
+    const { userId, mySkills, peers, profile, resources } = req.body;
 
     try {
+        console.log(`[Server] Save request for ${userId}. Resources count: ${resources ? resources.length : 'undefined'}`);
+        if (resources && resources.length > 0) console.log("[Server] First resource sample:", resources[0]);
+
         if (!userId) return res.status(400).json({ error: "Missing userId" });
 
         // Update profile in users table
@@ -113,19 +116,15 @@ app.post('/api/state/save', async (req, res) => {
         // clear old data
         await db.query('DELETE FROM skills WHERE user_id=$1', [userId]);
         await db.query('DELETE FROM peers WHERE user_id=$1', [userId]);
+        await db.query('DELETE FROM resources WHERE user_id=$1', [userId]);
 
-        // save skills
         // save skills
         for (const s of mySkills) {
-            // Support both string (legacy) and object
             const skillName = typeof s === 'object' ? s.skill : s;
             const skillCompany = typeof s === 'object' ? s.company : "";
-
-            await db.query(
-                'INSERT INTO skills (user_id, skill, company) VALUES ($1,$2,$3)',
-                [userId, skillName, skillCompany]
-            );
+            await db.query('INSERT INTO skills (user_id, skill, company) VALUES ($1,$2,$3)', [userId, skillName, skillCompany]);
         }
+        console.log("[Server] Skills saved.");
 
         // save peers
         for (const peer of peers) {
@@ -133,18 +132,29 @@ app.post('/api/state/save', async (req, res) => {
                 'INSERT INTO peers (user_id, name, company) VALUES ($1,$2,$3) RETURNING id',
                 [userId, peer.name, peer.company]
             );
-
             const peerId = peerRes.rows[0].id;
 
-            for (const s of peer.skills) {
+            for (const s of (peer.skills || [])) {
                 const skillName = typeof s === 'object' ? s.skill : s;
                 const skillCompany = typeof s === 'object' ? s.company : "";
+                await db.query('INSERT INTO peer_skills (peer_id, skill, company) VALUES ($1,$2,$3)', [peerId, skillName, skillCompany]);
+            }
+        }
+        console.log("[Server] Peers saved.");
 
+        // save resources
+        if (resources && Array.isArray(resources)) {
+            console.log(`[Server] Saving ${resources.length} resources...`);
+            for (const r of resources) {
+                const sName = (r.skill && typeof r.skill === 'object') ? r.skill.skill : r.skill;
                 await db.query(
-                    'INSERT INTO peer_skills (peer_id, skill, company) VALUES ($1,$2,$3)',
-                    [peerId, skillName, skillCompany]
+                    'INSERT INTO resources (user_id, skill, title, url, note, author, peer_index) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                    [userId, sName, r.title, r.url, r.note, r.author, r.peerIndex]
                 );
             }
+            console.log("[Server] Resources saved.");
+        } else {
+            console.log("[Server] No resources to save (or not array).");
         }
 
         res.json({ success: true });
@@ -172,6 +182,11 @@ app.get('/api/state/:userId', async (req, res) => {
 
         const peersRes = await db.query(
             'SELECT * FROM peers WHERE user_id=$1',
+            [userId]
+        );
+
+        const resourcesRes = await db.query(
+            'SELECT skill, title, url, note, author, peer_index FROM resources WHERE user_id=$1',
             [userId]
         );
 
@@ -203,7 +218,14 @@ app.get('/api/state/:userId', async (req, res) => {
             },
             mySkills: skillsRes.rows, // Returns {skill, company} objects
             peers,
-            resources: [],
+            resources: resourcesRes.rows.map(r => ({
+                skill: r.skill,
+                title: r.title,
+                url: r.url,
+                note: r.note,
+                author: r.author,
+                peerIndex: r.peer_index
+            })),
         });
     } catch (err) {
         console.error("❌ Load Error:", err.message);

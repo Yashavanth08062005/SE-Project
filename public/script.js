@@ -28,7 +28,9 @@
     try {
       const res = await fetch(`/api/state/${currentUserId}`);
       const data = await res.json();
+      console.log("[Client] Loaded State:", data);
       state = data;
+      refreshAll(); // Ensure UI updates with new data
     } catch (e) {
       console.error("Load State Error:", e);
     }
@@ -50,11 +52,18 @@
           userId: currentUserId,
           profile: state.profile,
           mySkills: state.mySkills,
-          peers: state.peers
+          peers: state.peers,
+          resources: state.resources
         })
       });
-      if (!res.ok) console.error("[Client] Save failed:", res.status, await res.text());
-      else console.log("[Client] Save successful");
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("[Client] Save failed:", res.status, txt);
+      }
+      else {
+        // alert("[Debug] Save Successful!"); // Optional: verify success
+        console.log("[Client] Save successful");
+      }
     } catch (e) {
       console.error("Save Error:", e);
     }

@@ -23,24 +23,23 @@ async function run() {
         const user = userRes.rows[0];
         console.log('User found:', user.id);
 
-        const skillsRes = await pool.query('SELECT * FROM skills WHERE user_id=$1', [user.id]);
-        console.log(`Current Skills count: ${skillsRes.rows.length}`);
-
-        if (skillsRes.rows.length === 0) {
-            console.log("⚠️ No skills found. Injecting sample skills...");
-            // Inject skills matching the screenshot expectation
-            const skills = [
-                { skill: 'Github', company: 'microsoft' },
-                { skill: 'React', company: 'microsoft' },
-                { skill: 'MongoDb', company: 'Juniper' }
-            ];
-
-            for (const s of skills) {
-                await pool.query('INSERT INTO skills (user_id, skill, company) VALUES ($1, $2, $3)', [user.id, s.skill, s.company]);
-            }
-            console.log("✅ Injected 3 skills.");
+        const resourcesRes = await pool.query('SELECT * FROM resources WHERE user_id=$1', [user.id]);
+        console.log(`Current Resources count: ${resourcesRes.rows.length}`);
+        if (resourcesRes.rows.length > 0) {
+            console.log("First Resource:", resourcesRes.rows[0]);
         } else {
-            console.log("Skills exist:", skillsRes.rows);
+            console.log("⚠️ No resources found in DB.");
+        }
+
+        console.log("🧪 Testing Resource Insert...");
+        try {
+            await pool.query(
+                'INSERT INTO resources (user_id, skill, title, url, note, author, peer_index) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                [user.id, 'TestSkill', 'TestTitle', 'http://test.com', 'TestNote', 'TestAuthor', 0]
+            );
+            console.log("✅ Insert succeeded!");
+        } catch (e) {
+            console.error("❌ Insert Failed:", e.message);
         }
 
     } catch (e) {

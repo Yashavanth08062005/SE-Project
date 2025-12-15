@@ -84,6 +84,14 @@ const initDb = async () => {
     await addCol('skills', 'company', 'VARCHAR(100)');
     await addCol('peer_skills', 'company', 'VARCHAR(100)');
 
+    // Migration for resources
+    await addCol('resources', 'skill', 'VARCHAR(100)');
+    await addCol('resources', 'title', 'VARCHAR(255)');
+    await addCol('resources', 'url', 'TEXT');
+    await addCol('resources', 'note', 'TEXT');
+    await addCol('resources', 'author', 'VARCHAR(255)');
+    await addCol('resources', 'peer_index', 'INT');
+
     // Fix peers company type to TEXT (for JSON)
     try { await pool.query("ALTER TABLE peers ALTER COLUMN company TYPE TEXT"); } catch (e) { }
 

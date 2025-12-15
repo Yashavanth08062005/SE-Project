@@ -50,7 +50,8 @@
           userId: currentUserId,
           profile: state.profile,
           mySkills: state.mySkills,
-          peers: state.peers
+          peers: state.peers,
+          resources: state.resources
         })
       });
       if (!res.ok) console.error("[Client] Save failed:", res.status, await res.text());
