@@ -21,49 +21,6 @@ const Bookings = () => {
 
     const API_BASE_URL = import.meta.env.VITE_BAP_URL || 'http://localhost:8081';
 
-    // Storage keys for cancelled bookings
-    const CANCELLED_BOOKINGS_KEY = 'cancelled_bookings';
-    const USER_CANCELLED_KEY = `cancelled_bookings_${user?.email || 'default'}`;
-
-    // Helper functions for managing cancelled bookings
-    const getCancelledBookings = () => {
-        try {
-            const cancelled = localStorage.getItem(USER_CANCELLED_KEY);
-            return cancelled ? JSON.parse(cancelled) : [];
-        } catch (error) {
-            console.error('Error reading cancelled bookings:', error);
-            return [];
-        }
-    };
-
-    const addCancelledBooking = (bookingId) => {
-        try {
-            const cancelled = getCancelledBookings();
-            if (!cancelled.includes(bookingId)) {
-                cancelled.push(bookingId);
-                localStorage.setItem(USER_CANCELLED_KEY, JSON.stringify(cancelled));
-            }
-        } catch (error) {
-            console.error('Error saving cancelled booking:', error);
-        }
-    };
-
-    const isBookingCancelled = (bookingId) => {
-        const cancelled = getCancelledBookings();
-        return cancelled.includes(bookingId);
-    };
-
-    // Optional: Function to clear all cancelled bookings (for testing)
-    const clearCancelledBookings = () => {
-        try {
-            localStorage.removeItem(USER_CANCELLED_KEY);
-            console.log('🗑️ Cleared all cancelled bookings for user');
-            fetchBookings(); // Refresh the list
-        } catch (error) {
-            console.error('Error clearing cancelled bookings:', error);
-        }
-    };
-
     useEffect(() => {
         if (!isAuthenticated) {
             navigate('/login');
@@ -78,102 +35,35 @@ const Bookings = () => {
             setLoading(true);
             setError('');
 
-            console.log('🚨 EMERGENCY DEBUG - Starting fetchBookings');
-            console.log('🚨 User object:', user);
-            console.log('🚨 User email:', user?.email);
-            console.log('🚨 Is authenticated:', isAuthenticated);
+            console.log('🔍 Fetching bookings for user:', user?.email);
 
-            // Only fetch real bookings from API - no demo data
             let realBookings = [];
 
-            try {
-                // Fetch real bookings from API
-                const endpoint = user?.id
-                    ? `/api/bookings/user/${user.id}`
-                    : `/api/bookings/email/${user?.email}`;
-
-                console.log('📥 Fetching real bookings from:', `${API_BASE_URL}${endpoint}`);
-                console.log('🔍 Debug - User info:', {
-                    userId: user?.id,
-                    userEmail: user?.email,
-                    userName: user?.full_name,
-                    isAuthenticated
-                });
-
-                console.log('🚨 MAKING API CALL NOW...');
-                const response = await axios.get(`${API_BASE_URL}${endpoint}`);
-                console.log('🚨 API RESPONSE:', response.data);
-
-                realBookings = response.data.bookings || [];
-                console.log('✅ Real bookings fetched:', realBookings.length);
-                console.log('🚨 BOOKINGS ARRAY:', realBookings);
-
-                // FORCE CHECK pratham@gmail.com regardless of user email
-                console.log('🚨 FORCE CHECKING pratham@gmail.com...');
+            if (user?.email) {
                 try {
-                    const forceResponse = await axios.get(`${API_BASE_URL}/api/bookings/email/pratham@gmail.com`);
-                    if (forceResponse.data.bookings && forceResponse.data.bookings.length > 0) {
-                        console.log('🚨 FORCE CHECK SUCCESS:', forceResponse.data.bookings.length, 'bookings found');
-                        realBookings = forceResponse.data.bookings;
-                    } else {
-                        console.log('🚨 FORCE CHECK: No bookings found');
-                    }
-                } catch (forceError) {
-                    console.log('🚨 FORCE CHECK ERROR:', forceError.message);
+                    // Fetch bookings using user's email
+                    const response = await axios.get(`${API_BASE_URL}/api/bookings/email/${user.email}`);
+                    realBookings = response.data.bookings || [];
+                    console.log(`✅ Found ${realBookings.length} bookings for ${user.email}`);
+                } catch (apiError) {
+                    console.log('❌ Error fetching bookings:', apiError.message);
+                    setError('Failed to load bookings. Please try refreshing the page.');
                 }
-
-                // If no bookings found and we have user email, try common email variations
-                if (realBookings.length === 0 && user?.email) {
-                    console.log('🔍 No bookings found with user email, trying fallback emails...');
-
-                    const fallbackEmails = [
-                        'pratham@gmail.com',
-                        'pratham@example.com',
-                        'test@example.com',
-                        'admin@example.com',
-                        user.email.toLowerCase(),
-                        user.email.replace(/\s+/g, '').toLowerCase()
-                    ];
-
-                    for (const email of fallbackEmails) {
-                        if (email === user?.email) continue; // Skip if already tried
-
-                        try {
-                            console.log(`🔍 Trying fallback email: ${email}`);
-                            const fallbackResponse = await axios.get(`${API_BASE_URL}/api/bookings/email/${email}`);
-                            if (fallbackResponse.data.bookings && fallbackResponse.data.bookings.length > 0) {
-                                console.log(`✅ Found ${fallbackResponse.data.bookings.length} bookings for ${email}`);
-                                realBookings = fallbackResponse.data.bookings;
-                                break;
-                            }
-                        } catch (fallbackError) {
-                            console.log(`❌ No bookings for ${email}`);
-                        }
-                    }
-                }
-
-            } catch (apiError) {
-                console.log('ℹ️ API Error:', apiError.response?.data || apiError.message);
-                console.log('ℹ️ No real bookings found for user');
-                // Don't add demo data - show empty state instead
+            } else {
+                console.log('❌ No user email available');
+                setError('Please log in to view your bookings.');
             }
 
-            // Filter out cancelled bookings using localStorage
-            const cancelledBookingIds = getCancelledBookings();
-            const activeBookings = realBookings.filter(booking => !cancelledBookingIds.includes(booking.id));
-
-            console.log('📋 Total real bookings:', realBookings.length);
-            console.log('❌ Cancelled booking IDs:', cancelledBookingIds);
-            console.log('✅ Active bookings after filtering:', activeBookings.length);
-            console.log('🚨 FINAL BOOKINGS TO DISPLAY:', activeBookings);
-
-            setBookings(activeBookings);
-            console.log('🚨 SET BOOKINGS CALLED WITH:', activeBookings.length, 'bookings');
+            // Don't filter out any bookings - show all bookings
+            // The localStorage filtering was causing issues
+            console.log('📋 Total bookings to display:', realBookings.length);
+            
+            setBookings(realBookings);
             setLoading(false);
 
         } catch (err) {
-            console.error('❌ Error fetching bookings:', err);
-            setError(err.response?.data?.error || 'Failed to fetch bookings');
+            console.error('❌ Error in fetchBookings:', err);
+            setError('Failed to fetch bookings. Please try again.');
             setLoading(false);
         }
     };
@@ -263,11 +153,12 @@ const Bookings = () => {
                 const cancellationCharges = selectedBooking.amount - refundAmount;
                 const refundId = cancelledOrder.payment?.params?.refund_id || `REF${Date.now()}`;
 
-                // Add booking to cancelled list in localStorage
-                addCancelledBooking(selectedBooking.id);
-
-                // Remove the cancelled booking from the current list
-                setBookings(prev => prev.filter(booking => booking.id !== selectedBooking.id));
+                // Update booking status in the current list instead of removing it
+                setBookings(prev => prev.map(booking => 
+                    booking.id === selectedBooking.id 
+                        ? { ...booking, booking_status: 'CANCELLED' }
+                        : booking
+                ));
 
                 // Prepare refund details for modal
                 setRefundDetails({
@@ -376,29 +267,20 @@ const Bookings = () => {
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Bookings</h1>
                     <p className="text-gray-600">View and manage all your travel bookings</p>
 
-                    {/* Debug Info - Remove in production */}
-                    {process.env.NODE_ENV === 'development' && (
-                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                            <p className="text-xs text-blue-800">
-                                <strong>Debug Info:</strong> User: {user?.email || 'No email'} |
-                                User ID: {user?.id || 'No ID'} |
-                                Bookings: {bookings.length} |
-                                Cancelled: {getCancelledBookings().length} |
-                                <button
-                                    onClick={clearCancelledBookings}
-                                    className="ml-2 text-blue-600 underline hover:text-blue-800"
-                                >
-                                    Clear Cancelled
-                                </button> |
-                                <button
-                                    onClick={fetchBookings}
-                                    className="ml-2 text-blue-600 underline hover:text-blue-800"
-                                >
-                                    Refresh
-                                </button>
-                            </p>
-                        </div>
-                    )}
+                    {/* Debug Info - Always show in development */}
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-800">
+                            <strong>Debug Info:</strong> User: {user?.email || 'No email'} |
+                            User ID: {user?.id || 'No ID'} |
+                            Bookings: {bookings.length} |
+                            <button
+                                onClick={fetchBookings}
+                                className="ml-2 text-blue-600 underline hover:text-blue-800"
+                            >
+                                Refresh Bookings
+                            </button>
+                        </p>
+                    </div>
                 </div>
 
                 {/* Filter Tabs */}
