@@ -215,9 +215,18 @@ const PaymentPage = () => {
             try {
                 const bookingRef = `BK${Date.now().toString().slice(-8)}`;
                 
+                console.log('🔍 Debug - User info for booking:', {
+                    userEmail: user?.email,
+                    userId: user?.id,
+                    userName: user?.full_name,
+                    formEmail: bookingData.passenger_email,
+                    finalEmail: user?.email || bookingData.passenger_email,
+                    finalUserId: user?.id || null
+                });
+                
                 const bookingPayload = {
                     booking_reference: bookingRef,
-                    user_id: null, // Will be set by backend if user is authenticated
+                    user_id: user?.id || null, // Set from authenticated user
                     booking_type: type,
                     item_id: item.id,
                     provider_id: item.providerId || 'provider-001',
