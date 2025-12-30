@@ -43,14 +43,14 @@ const mockBookings = [
 ];
 
 function simulateDisplay(booking) {
-    // Simulate the new display logic
+    // Simulate the new display logic (SWAPPED)
     const mainTitle = booking.booking_type === 'bus' || booking.booking_type === 'train' 
-        ? (booking.item_code || booking.item_id || 'N/A')
+        ? (booking.item_name && booking.item_name !== 'null' ? booking.item_name : 
+           booking.booking_type === 'bus' ? 'Bus Operator' : 'Train Service')
         : (booking.item_name || 'N/A');
         
     const subtitle = booking.booking_type === 'bus' || booking.booking_type === 'train' 
-        ? (booking.item_name && booking.item_name !== 'null' ? booking.item_name : 
-           booking.booking_type === 'bus' ? 'Bus Operator' : 'Train Service')
+        ? (booking.item_code || booking.item_id || 'N/A')
         : (booking.item_code || 'N/A');
     
     return { mainTitle, subtitle };
@@ -77,7 +77,7 @@ mockBookings.forEach((booking, index) => {
 });
 
 console.log('📊 Summary of changes:');
-console.log('✅ Bus bookings: Show bus code/ID first, then operator name');
-console.log('✅ Train bookings: Show train number first, then train name');
+console.log('✅ Bus bookings: Show operator name first, then bus code/ID');
+console.log('✅ Train bookings: Show train name first, then train number');
 console.log('✅ Flight bookings: Keep current format (airline first, then flight number)');
-console.log('✅ Old bookings: Will show item_code first, then item_name (even if null)');
+console.log('✅ Old bookings: Will show fallback name first, then item_code');

@@ -392,14 +392,60 @@ const Bookings = () => {
                                             <div>
                                                 <h3 className="text-lg font-bold text-gray-900">
                                                     {booking.booking_type === 'bus' || booking.booking_type === 'train' 
-                                                        ? (booking.item_code || booking.item_id || 'N/A')
+                                                        ? (() => {
+                                                            // Try to get the real name from multiple sources
+                                                            let realName = null;
+                                                            
+                                                            // 1. Try item_name if it's valid
+                                                            if (booking.item_name && booking.item_name !== 'null' && booking.item_name !== 'undefined') {
+                                                                realName = booking.item_name;
+                                                            }
+                                                            
+                                                            // 2. Try item_details.descriptor.name if available
+                                                            if (!realName && booking.item_details) {
+                                                                try {
+                                                                    const details = typeof booking.item_details === 'string' 
+                                                                        ? JSON.parse(booking.item_details) 
+                                                                        : booking.item_details;
+                                                                    if (details.descriptor?.name) {
+                                                                        realName = details.descriptor.name;
+                                                                    }
+                                                                } catch (e) {
+                                                                    // Ignore parsing errors
+                                                                }
+                                                            }
+                                                            
+                                                            // 3. Fallback based on item_code/item_id pattern
+                                                            if (!realName) {
+                                                                const itemId = booking.item_code || booking.item_id || '';
+                                                                if (itemId.startsWith('bus-')) {
+                                                                    // Map common bus IDs to names (you can expand this)
+                                                                    const busNames = {
+                                                                        'bus-13': 'Kadamba Transport',
+                                                                        'bus-15': 'SRS Travels',
+                                                                        'SRS-BD-001': 'SRS Travels'
+                                                                    };
+                                                                    realName = busNames[itemId] || busNames[booking.item_code] || 'Bus Service';
+                                                                } else if (itemId.startsWith('train-')) {
+                                                                    // Map common train IDs to names
+                                                                    const trainNames = {
+                                                                        'train-8-2a': 'Rajdhani Express',
+                                                                        'train-12-3a': 'Shatabdi Express'
+                                                                    };
+                                                                    realName = trainNames[itemId] || 'Train Service';
+                                                                } else {
+                                                                    realName = booking.booking_type === 'bus' ? 'Bus Service' : 'Train Service';
+                                                                }
+                                                            }
+                                                            
+                                                            return realName;
+                                                        })()
                                                         : (booking.item_name || 'N/A')
                                                     }
                                                 </h3>
                                                 <p className="text-sm text-gray-600">
                                                     {booking.booking_type === 'bus' || booking.booking_type === 'train' 
-                                                        ? (booking.item_name && booking.item_name !== 'null' ? booking.item_name : 
-                                                           booking.booking_type === 'bus' ? 'Bus Operator' : 'Train Service')
+                                                        ? (booking.item_code || booking.item_id || 'N/A')
                                                         : (booking.item_code || 'N/A')
                                                     }
                                                 </p>
