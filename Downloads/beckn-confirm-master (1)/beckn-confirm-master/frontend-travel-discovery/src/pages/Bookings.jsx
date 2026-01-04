@@ -38,26 +38,44 @@ const Bookings = () => {
             console.log('🔍 Fetching bookings for user:', user?.email);
 
             let realBookings = [];
+            let emailBookings = [];
+            let idBookings = [];
 
+            // 1. Fetch by Email (Primary)
             if (user?.email) {
                 try {
-                    // Fetch bookings using user's email
+                    console.log(`Fetching bookings for email: ${user.email}`);
                     const response = await axios.get(`${API_BASE_URL}/api/bookings/email/${user.email}`);
-                    realBookings = response.data.bookings || [];
-                    console.log(`✅ Found ${realBookings.length} bookings for ${user.email}`);
+                    emailBookings = response.data.bookings || [];
+                    console.log(`✅ Found ${emailBookings.length} bookings by email`);
                 } catch (apiError) {
-                    console.log('❌ Error fetching bookings:', apiError.message);
-                    setError('Failed to load bookings. Please try refreshing the page.');
+                    console.warn('⚠️ Error fetching bookings by email:', apiError.message);
                 }
-            } else {
-                console.log('❌ No user email available');
-                setError('Please log in to view your bookings.');
             }
 
-            // Don't filter out any bookings - show all bookings
-            // The localStorage filtering was causing issues
-            console.log('📋 Total bookings to display:', realBookings.length);
-            
+            // 2. Fetch by User ID (Secondary/Fallback)
+            // Try multiple ID fields just in case
+            const userId = user?.id || user?._id || user?.userId;
+            if (userId) {
+                try {
+                    console.log(`Fetching bookings for user ID: ${userId}`);
+                    const response = await axios.get(`${API_BASE_URL}/api/bookings/user/${userId}`);
+                    idBookings = response.data.bookings || [];
+                    console.log(`✅ Found ${idBookings.length} bookings by user ID`);
+                } catch (apiError) {
+                    console.warn('⚠️ Error fetching bookings by ID:', apiError.message);
+                }
+            }
+
+            // 3. Merge and Deduplicate
+            const allBookings = [...emailBookings, ...idBookings];
+            const uniqueBookings = Array.from(new Map(allBookings.map(item => [item.booking_reference, item])).values());
+
+            // Sort by creation date (newest first)
+            realBookings = uniqueBookings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            console.log(`📋 Total unique bookings to display: ${realBookings.length}`);
+
             setBookings(realBookings);
             setLoading(false);
 
@@ -124,8 +142,8 @@ const Bookings = () => {
 
             if (response.data.success) {
                 // Update booking status in the current list
-                setBookings(prev => prev.map(booking => 
-                    booking.id === selectedBooking.id 
+                setBookings(prev => prev.map(booking =>
+                    booking.id === selectedBooking.id
                         ? { ...booking, booking_status: 'CANCELLED' }
                         : booking
                 ));
@@ -362,21 +380,21 @@ const Bookings = () => {
                                             )}
                                             <div>
                                                 <h3 className="text-lg font-bold text-gray-900">
-                                                    {booking.booking_type === 'bus' || booking.booking_type === 'train' 
+                                                    {booking.booking_type === 'bus' || booking.booking_type === 'train'
                                                         ? (() => {
                                                             // Try to get the real name from multiple sources
                                                             let realName = null;
-                                                            
+
                                                             // 1. Try item_name if it's valid
                                                             if (booking.item_name && booking.item_name !== 'null' && booking.item_name !== 'undefined') {
                                                                 realName = booking.item_name;
                                                             }
-                                                            
+
                                                             // 2. Try item_details.descriptor.name if available
                                                             if (!realName && booking.item_details) {
                                                                 try {
-                                                                    const details = typeof booking.item_details === 'string' 
-                                                                        ? JSON.parse(booking.item_details) 
+                                                                    const details = typeof booking.item_details === 'string'
+                                                                        ? JSON.parse(booking.item_details)
                                                                         : booking.item_details;
                                                                     if (details.descriptor?.name) {
                                                                         realName = details.descriptor.name;
@@ -385,7 +403,7 @@ const Bookings = () => {
                                                                     // Ignore parsing errors
                                                                 }
                                                             }
-                                                            
+
                                                             // 3. Fallback based on item_code/item_id pattern
                                                             if (!realName) {
                                                                 const itemId = booking.item_code || booking.item_id || '';
@@ -408,14 +426,14 @@ const Bookings = () => {
                                                                     realName = booking.booking_type === 'bus' ? 'Bus Service' : 'Train Service';
                                                                 }
                                                             }
-                                                            
+
                                                             return realName;
                                                         })()
                                                         : (booking.item_name || 'N/A')
                                                     }
                                                 </h3>
                                                 <p className="text-sm text-gray-600">
-                                                    {booking.booking_type === 'bus' || booking.booking_type === 'train' 
+                                                    {booking.booking_type === 'bus' || booking.booking_type === 'train'
                                                         ? (booking.item_code || booking.item_id || 'N/A')
                                                         : (booking.item_code || 'N/A')
                                                     }

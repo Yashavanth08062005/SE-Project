@@ -83,9 +83,9 @@ class BookingController {
 
             const result = await db.query(query, values);
 
-            logger.info('Booking created successfully', { 
+            logger.info('Booking created successfully', {
                 booking_id: result.rows[0].id,
-                booking_reference: result.rows[0].booking_reference 
+                booking_reference: result.rows[0].booking_reference
             });
 
             return res.status(201).json({
@@ -191,9 +191,10 @@ class BookingController {
 
             logger.info('Fetching bookings by email', { email });
 
+            // Case-insensitive email search
             const query = `
                 SELECT * FROM bookings
-                WHERE passenger_email = $1
+                WHERE LOWER(passenger_email) = LOWER($1)
                 ORDER BY created_at DESC
             `;
 

@@ -31,17 +31,32 @@ const PaymentSuccess = () => {
             const bookingRef = `BK${Date.now().toString().slice(-8)}`;
 
             // Try to get user ID from multiple sources
-            let userId = user?.id;
+            // Try to get user ID from multiple sources
+            let userId = user?.id || user?._id || user?.userId;
+
             if (!userId) {
                 try {
-                    const storedUser = localStorage.getItem('user_data'); // Check usual storage keys
-                    if (storedUser) {
-                        userId = JSON.parse(storedUser).id;
+                    // Try getting from localStorage 'user_data'
+                    const storedData = localStorage.getItem('user_data');
+                    if (storedData) {
+                        const parsedUser = JSON.parse(storedData);
+                        userId = parsedUser.id || parsedUser._id || parsedUser.userId;
+                    }
+
+                    // Also try 'user' key which is sometimes used
+                    if (!userId) {
+                        const storedUser = localStorage.getItem('user');
+                        if (storedUser) {
+                            const parsedUser = JSON.parse(storedUser);
+                            userId = parsedUser.id || parsedUser._id || parsedUser.userId;
+                        }
                     }
                 } catch (e) {
                     console.error('Error parsing stored user:', e);
                 }
             }
+
+            console.log('Detected User ID for booking:', userId);
 
             // Robust data extraction for different booking types
             let itemName = item.details?.name || item.name;
