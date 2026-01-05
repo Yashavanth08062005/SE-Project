@@ -352,10 +352,29 @@ const PaymentPage = () => {
                 };
 
                 // Override origin/destination from searchContext if available (to match user intent)
+                // Override origin/destination from searchContext if available (to match user intent)
                 const searchContext = location.state?.searchContext;
                 if (searchContext) {
                     if (searchContext.origin) bookingPayload.origin = searchContext.origin;
                     if (searchContext.destination) bookingPayload.destination = searchContext.destination;
+
+                    // FIX: Use User's Selected Dates for Hotels
+                    if (type === 'hotel') {
+                        if (searchContext.checkInDate) {
+                            bookingPayload.check_in_date = searchContext.checkInDate;
+                            bookingPayload.departure_time = searchContext.checkInDate;
+                            // Update item for next page
+                            if (!item.details) item.details = {};
+                            item.details.checkIn = searchContext.checkInDate;
+                        }
+                        if (searchContext.checkOutDate) {
+                            bookingPayload.check_out_date = searchContext.checkOutDate;
+                            bookingPayload.arrival_time = searchContext.checkOutDate;
+                            // Update item for next page
+                            if (!item.details) item.details = {};
+                            item.details.checkOut = searchContext.checkOutDate;
+                        }
+                    }
 
                     console.log('✨ Applied User Search Context:', searchContext);
                 }

@@ -4,11 +4,11 @@ import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const HotelCard = ({ option }) => {
+const HotelCard = ({ option, searchContext }) => {
   const [showDetails, setShowDetails] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  
+
   const formatDate = (dateString) => {
     try {
       return format(new Date(dateString), 'dd MMM yyyy');
@@ -61,7 +61,7 @@ const HotelCard = ({ option }) => {
                 </div>
               )}
             </div>
-            
+
             {/* Location */}
             {(address.street || details.cityName) && (
               <div className="flex items-start space-x-2 text-sm text-gray-600">
@@ -78,12 +78,12 @@ const HotelCard = ({ option }) => {
           <div className="flex items-center space-x-6 mb-3 text-sm">
             <div>
               <p className="text-gray-500 text-xs">Check-in</p>
-              <p className="font-semibold text-gray-900">{formatDate(option.checkIn)}</p>
+              <p className="font-semibold text-gray-900">{formatDate(searchContext?.checkInDate || option.checkIn)}</p>
             </div>
             <div className="text-gray-400">→</div>
             <div>
               <p className="text-gray-500 text-xs">Check-out</p>
-              <p className="font-semibold text-gray-900">{formatDate(option.checkOut)}</p>
+              <p className="font-semibold text-gray-900">{formatDate(searchContext?.checkOutDate || option.checkOut)}</p>
             </div>
             <div className="ml-auto">
               <p className="text-gray-500 text-xs">Nights</p>
@@ -98,7 +98,7 @@ const HotelCard = ({ option }) => {
               <Users className="h-4 w-4 text-blue-500" />
               <span>{details.adults || 1} {details.adults > 1 ? 'Guests' : 'Guest'}</span>
             </div>
-            
+
             {/* Rooms */}
             <div className="flex items-center space-x-1">
               <Bed className="h-4 w-4 text-blue-500" />
@@ -129,7 +129,7 @@ const HotelCard = ({ option }) => {
               ₹{option.pricePerNight?.toLocaleString('en-IN')} per night
             </p>
           </div>
-          
+
           <button
             onClick={handleBookNow}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 font-semibold transition-colors text-sm"
@@ -179,83 +179,83 @@ const HotelCard = ({ option }) => {
       {/* Hotel Details Section - Conditional Render */}
       {showDetails && (
         <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
-            {/* Room Details */}
-            {details.roomDescription && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">Room Details</h4>
-                <p className="text-sm text-gray-600">{details.roomDescription}</p>
-                <div className="mt-2 text-sm text-gray-700">
-                  <p><span className="font-medium">Room Type:</span> {details.roomType || 'Standard'}</p>
-                  {details.bedType && <p><span className="font-medium">Bed:</span> {details.bedType} ({details.beds} bed{details.beds > 1 ? 's' : ''})</p>}
-                </div>
-              </div>
-            )}
-
-            {/* All Amenities */}
-            {details.amenities && details.amenities.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">Amenities</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {details.amenities.map((amenity, idx) => (
-                    <div key={idx} className="flex items-center space-x-2 text-sm text-gray-600">
-                      {getAmenityIcon(amenity)}
-                      <span>{amenity}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Policies */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <h4 className="font-semibold text-blue-900 mb-2 text-sm">Policies</h4>
-              <div className="space-y-1 text-xs text-gray-700">
-                {details.checkInTime && (
-                  <p><span className="font-medium">Check-in:</span> {details.checkInTime}</p>
-                )}
-                {details.checkOutTime && (
-                  <p><span className="font-medium">Check-out:</span> {details.checkOutTime}</p>
-                )}
-                {details.cancellationPolicy && (
-                  <p><span className="font-medium">Cancellation:</span> {details.cancellationPolicy}</p>
-                )}
-                {details.paymentPolicy && (
-                  <p><span className="font-medium">Payment:</span> {details.paymentPolicy}</p>
-                )}
+          {/* Room Details */}
+          {details.roomDescription && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">Room Details</h4>
+              <p className="text-sm text-gray-600">{details.roomDescription}</p>
+              <div className="mt-2 text-sm text-gray-700">
+                <p><span className="font-medium">Room Type:</span> {details.roomType || 'Standard'}</p>
+                {details.bedType && <p><span className="font-medium">Bed:</span> {details.bedType} ({details.beds} bed{details.beds > 1 ? 's' : ''})</p>}
               </div>
             </div>
+          )}
 
-            {/* Contact Information */}
-            {(details.phone || details.email) && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">Contact</h4>
-                <div className="text-sm text-gray-600 space-y-1">
-                  {details.phone && <p><span className="font-medium">Phone:</span> {details.phone}</p>}
-                  {details.email && <p><span className="font-medium">Email:</span> {details.email}</p>}
-                </div>
+          {/* All Amenities */}
+          {details.amenities && details.amenities.length > 0 && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">Amenities</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {details.amenities.map((amenity, idx) => (
+                  <div key={idx} className="flex items-center space-x-2 text-sm text-gray-600">
+                    {getAmenityIcon(amenity)}
+                    <span>{amenity}</span>
+                  </div>
+                ))}
               </div>
-            )}
-
-            {/* Address */}
-            {address.street && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">Full Address</h4>
-                <p className="text-sm text-gray-600">
-                  {address.street}<br />
-                  {address.city && `${address.city}, `}
-                  {address.state && `${address.state} `}
-                  {address.postalCode}<br />
-                  {address.country}
-                </p>
-              </div>
-            )}
-
-            {/* Provider Info */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
-              <p><span className="font-medium">Hotel ID:</span> {details.hotelId}</p>
-              {details.chainCode && <p><span className="font-medium">Chain:</span> {details.chainCode}</p>}
-              <p><span className="font-medium">Data Provider:</span> {option.providerId}</p>
             </div>
+          )}
+
+          {/* Policies */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <h4 className="font-semibold text-blue-900 mb-2 text-sm">Policies</h4>
+            <div className="space-y-1 text-xs text-gray-700">
+              {details.checkInTime && (
+                <p><span className="font-medium">Check-in:</span> {details.checkInTime}</p>
+              )}
+              {details.checkOutTime && (
+                <p><span className="font-medium">Check-out:</span> {details.checkOutTime}</p>
+              )}
+              {details.cancellationPolicy && (
+                <p><span className="font-medium">Cancellation:</span> {details.cancellationPolicy}</p>
+              )}
+              {details.paymentPolicy && (
+                <p><span className="font-medium">Payment:</span> {details.paymentPolicy}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          {(details.phone || details.email) && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">Contact</h4>
+              <div className="text-sm text-gray-600 space-y-1">
+                {details.phone && <p><span className="font-medium">Phone:</span> {details.phone}</p>}
+                {details.email && <p><span className="font-medium">Email:</span> {details.email}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Address */}
+          {address.street && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">Full Address</h4>
+              <p className="text-sm text-gray-600">
+                {address.street}<br />
+                {address.city && `${address.city}, `}
+                {address.state && `${address.state} `}
+                {address.postalCode}<br />
+                {address.country}
+              </p>
+            </div>
+          )}
+
+          {/* Provider Info */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+            <p><span className="font-medium">Hotel ID:</span> {details.hotelId}</p>
+            {details.chainCode && <p><span className="font-medium">Chain:</span> {details.chainCode}</p>}
+            <p><span className="font-medium">Data Provider:</span> {option.providerId}</p>
+          </div>
         </div>
       )}
     </div>

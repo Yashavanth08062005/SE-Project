@@ -8,8 +8,8 @@ const BookingConfirmation = () => {
 
 
     const { booking, flight, passenger, type } = location.state || {}; // flight contains the item/option details
-    // Fallback type if not passed in state, try to guess from flight details
-    const bookingType = type || (flight?.travelMode) || (flight?.details?.trainName ? 'train' : 'flight');
+    // Fallback type if passed explicitly, or try to guess from details
+    const bookingType = type || (flight?.travelMode) || (flight?.details?.trainName ? 'train' : flight?.details?.hotelName ? 'hotel' : 'flight');
 
     if (!booking || !flight || !passenger) {
         return (
@@ -32,6 +32,7 @@ const BookingConfirmation = () => {
     const renderModeIcon = () => {
         if (bookingType === 'train') return <Train className="h-6 w-6 mr-2 text-green-600" />;
         if (bookingType === 'bus') return <Bus className="h-6 w-6 mr-2 text-orange-600" />;
+        if (bookingType === 'hotel') return <Hotel className="h-6 w-6 mr-2 text-purple-600" />;
         return <Plane className="h-6 w-6 mr-2 text-blue-600" />;
     };
 
@@ -56,7 +57,7 @@ const BookingConfirmation = () => {
                         Booking Confirmed!
                     </h1>
                     <p className="text-gray-600 mb-4">
-                        Your {bookingType === 'train' ? 'train' : bookingType === 'bus' ? 'bus' : 'flight'} has been successfully booked
+                        Your {bookingType === 'train' ? 'train' : bookingType === 'bus' ? 'bus' : bookingType === 'hotel' ? 'hotel' : 'flight'} has been successfully booked
                     </p>
                     <div className="inline-block bg-blue-50 px-6 py-3 rounded-lg">
                         <p className="text-sm text-gray-600">Booking Reference</p>
@@ -68,56 +69,70 @@ const BookingConfirmation = () => {
                 <div className="bg-white rounded-xl shadow-md p-6 mb-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                         {renderModeIcon()}
-                        {bookingType === 'train' ? 'Train Details' : bookingType === 'bus' ? 'Bus Details' : 'Flight Details'}
+                        {bookingType === 'train' ? 'Train Details' : bookingType === 'bus' ? 'Bus Details' : bookingType === 'hotel' ? 'Hotel Details' : 'Flight Details'}
                     </h2>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <p className="text-sm text-gray-500">
-                                {bookingType === 'train' ? 'Train Name' : bookingType === 'bus' ? 'Operator' : 'Airline'}
+                                {bookingType === 'train' ? 'Train Name' : bookingType === 'bus' ? 'Operator' : bookingType === 'hotel' ? 'Hotel Name' : 'Airline'}
                             </p>
                             <p className="text-lg font-semibold text-gray-900">
-                                {flight.details?.trainName || flight.details?.operator || flight.details?.airline || flight.descriptor?.name || 'Carrier'}
+                                {flight.details?.trainName || flight.details?.operator || flight.details?.hotelName || flight.details?.name || flight.details?.airline || flight.descriptor?.name || 'Carrier'}
                             </p>
                             <p className="text-sm text-gray-600">
-                                {bookingType === 'train' ? 'Train' : bookingType === 'bus' ? 'Bus' : 'Flight'} {flight.details?.trainNumber || flight.details?.busNumber || flight.details?.flightNumber || flight.descriptor?.code || 'N/A'}
+                                {bookingType === 'train' ? `Train ${flight.details?.trainNumber || ''}` : bookingType === 'bus' ? `Bus ${flight.details?.busNumber || ''}` : bookingType === 'hotel' ? '' : `Flight ${flight.details?.flightNumber || flight.descriptor?.code || 'N/A'}`}
                             </p>
                         </div>
 
                         <div>
-                            <p className="text-sm text-gray-500">Route</p>
+                            <p className="text-sm text-gray-500">{bookingType === 'hotel' ? 'Location' : 'Route'}</p>
                             <p className="text-lg font-semibold text-gray-900">
-                                {location.state?.searchContext?.origin || flight.details?.departureStation || flight.details?.departureLocation || flight.details?.departureCity || flight.origin || 'DEP'}
-                                {' → '}
-                                {location.state?.searchContext?.destination || flight.details?.arrivalStation || flight.details?.arrivalLocation || flight.details?.arrivalCity || flight.destination || 'ARR'}
+                                {bookingType === 'hotel'
+                                    ? (
+                                        typeof flight.details?.address === 'string' ? flight.details.address :
+                                            flight.details?.address?.street || flight.details?.address?.city ||
+                                            flight.details?.city || flight.details?.location_id || 'Hotel Location'
+                                    )
+                                    : (
+                                        <>
+                                            {location.state?.searchContext?.origin || flight.details?.departureStation || flight.details?.departureLocation || flight.details?.departureCity || flight.origin || 'DEP'}
+                                            {' → '}
+                                            {location.state?.searchContext?.destination || flight.details?.arrivalStation || flight.details?.arrivalLocation || flight.details?.arrivalCity || flight.destination || 'ARR'}
+                                        </>
+                                    )
+                                }
                             </p>
                             <p className="text-xs text-gray-500">
-                                {flight.details?.originCity && flight.details?.destinationCity && !location.state?.searchContext &&
+                                {bookingType !== 'hotel' && flight.details?.originCity && flight.details?.destinationCity && !location.state?.searchContext &&
                                     `${flight.details.originCity} to ${flight.details.destinationCity}`
                                 }
                             </p>
                         </div>
 
-                        <div>
-                            <p className="text-sm text-gray-500">Duration</p>
-                            <p className="text-lg font-semibold text-gray-900">
-                                {formatDuration(flight.details?.duration)}
-                            </p>
-                        </div>
+                        {bookingType !== 'hotel' && (
+                            <div>
+                                <p className="text-sm text-gray-500">Duration</p>
+                                <p className="text-lg font-semibold text-gray-900">
+                                    {formatDuration(flight.details?.duration)}
+                                </p>
+                            </div>
+                        )}
 
                         <div>
                             <p className="text-sm text-gray-500">Price</p>
                             <p className="text-lg font-semibold text-green-600">
-                                ₹{flight.price || '0'}
+                                ₹{typeof flight.price === 'object' ? flight.price.value : flight.price || '0'}
                             </p>
                         </div>
 
-                        {flight.details?.departureTime && (
+                        {(flight.details?.departureTime || flight.details?.checkIn) && (
                             <div>
-                                <p className="text-sm text-gray-500">Departure</p>
+                                <p className="text-sm text-gray-500">{bookingType === 'hotel' ? 'Check-in' : 'Departure'}</p>
                                 <p className="text-lg font-semibold text-gray-900">
                                     {(() => {
-                                        const date = new Date(flight.details.departureTime);
+                                        const dateStr = flight.details?.checkIn || flight.details?.departureTime;
+                                        const date = new Date(dateStr);
                                         return !isNaN(date.getTime())
                                             ? date.toLocaleString('en-US', {
                                                 month: 'short',
@@ -125,22 +140,28 @@ const BookingConfirmation = () => {
                                                 hour: '2-digit',
                                                 minute: '2-digit'
                                             })
-                                            : flight.details.departureTime; // Fallback to raw string if invalid date
+                                            : String(dateStr); // Fallback
                                     })()}
                                 </p>
                             </div>
                         )}
 
-                        {flight.details?.arrivalTime && (
+                        {(flight.details?.arrivalTime || flight.details?.checkOut) && (
                             <div>
-                                <p className="text-sm text-gray-500">Arrival</p>
+                                <p className="text-sm text-gray-500">{bookingType === 'hotel' ? 'Check-out' : 'Arrival'}</p>
                                 <p className="text-lg font-semibold text-gray-900">
-                                    {new Date(flight.details.arrivalTime).toLocaleString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    })}
+                                    {(() => {
+                                        const dateStr = flight.details?.checkOut || flight.details?.arrivalTime;
+                                        const date = new Date(dateStr);
+                                        return !isNaN(date.getTime())
+                                            ? date.toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })
+                                            : String(dateStr);
+                                    })()}
                                 </p>
                             </div>
                         )}
@@ -272,6 +293,13 @@ const BookingConfirmation = () => {
                                 <li>• Please arrive at the boarding point 15 minutes before departure</li>
                                 <li>• Carry a valid photo ID for verification</li>
                                 <li>• Luggage policy varies by operator</li>
+                            </>
+                        ) : bookingType === 'hotel' ? (
+                            <>
+                                <li>• Standard Check-in time is 12:00 PM and Check-out time is 11:00 AM</li>
+                                <li>• Please carry a valid government-issued photo ID for all guests</li>
+                                <li>• Early check-in or late check-out is subject to availability</li>
+                                <li>• Married couples may need to present proof of marriage</li>
                             </>
                         ) : (
                             <>

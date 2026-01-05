@@ -106,7 +106,7 @@ const SearchResults = () => {
       <div className="max-w-7xl mx-auto px-4">
         {/* Search Summary */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          {searchParams.get("origin") ? (
+          {searchParams.get("origin") && !searchParams.get("cityCode") && !searchParams.get("checkInDate") ? (
             <>
               <h1 className="text-2xl font-bold mb-2">
                 {searchParams.get("origin")} → {searchParams.get("destination")}
@@ -119,7 +119,7 @@ const SearchResults = () => {
           ) : (
             <>
               <h1 className="text-2xl font-bold mb-2">
-                {searchParams.get("cityCode")}
+                {searchParams.get("cityCode") || searchParams.get("origin") || searchParams.get("destination")}
               </h1>
               <p className="text-gray-600">
                 Check-in: {searchParams.get("checkInDate")} • Check-out: {searchParams.get("checkOutDate")} •{" "}
@@ -185,9 +185,9 @@ const SearchResults = () => {
                 <div className="space-y-4">
                   {filteredResults.map((option, index) =>
                     option.travelMode === "hotel" ? (
-                      <HotelCard 
-                        key={option.id || index} 
-                        option={option} 
+                      <HotelCard
+                        key={option.id || index}
+                        option={option}
                         searchContext={{
                           cityCode: searchParams.get("cityCode"),
                           checkInDate: searchParams.get("checkInDate"),
@@ -197,9 +197,9 @@ const SearchResults = () => {
                         }}
                       />
                     ) : (
-                      <TravelCard 
-                        key={option.id || index} 
-                        option={option} 
+                      <TravelCard
+                        key={option.id || index}
+                        option={option}
                         searchContext={{
                           origin: searchParams.get("origin"),
                           destination: searchParams.get("destination"),

@@ -171,11 +171,26 @@ const PaymentSuccess = () => {
             }
 
             // Override with User Search Context if available (Prioritize User Intent)
-            const searchContext = location.state?.searchContext;
             if (searchContext) {
                 console.log('✨ Applying User Search Context to Booking:', searchContext);
                 if (searchContext.origin) origin = searchContext.origin;
                 if (searchContext.destination) destination = searchContext.destination;
+
+                // FIX: Use User's Selected Dates for Hotels (Source of Truth)
+                if (type === 'hotel') {
+                    if (searchContext.checkInDate) {
+                        departureTime = searchContext.checkInDate;
+                        // Also update item details for display on next page
+                        if (!item.details) item.details = {};
+                        item.details.checkIn = searchContext.checkInDate;
+                    }
+                    if (searchContext.checkOutDate) {
+                        arrivalTime = searchContext.checkOutDate;
+                        // Also update item details for display on next page
+                        if (!item.details) item.details = {};
+                        item.details.checkOut = searchContext.checkOutDate;
+                    }
+                }
             }
 
             // Sanitize and Validate Data
@@ -205,8 +220,8 @@ const PaymentSuccess = () => {
                 destination: destination,
                 departure_time: departureTime,
                 arrival_time: arrivalTime,
-                check_in_date: type === 'hotel' ? item.checkIn : null,
-                check_out_date: type === 'hotel' ? item.checkOut : null,
+                check_in_date: type === 'hotel' ? departureTime : null,
+                check_out_date: type === 'hotel' ? arrivalTime : null,
                 passenger_name: bookingData.passenger_name || bookingData.name || 'Guest',
                 passenger_email: bookingData.passenger_email || bookingData.email || 'guest@example.com',
                 passenger_phone: bookingData.passenger_phone || bookingData.phone || '0000000000',
@@ -340,7 +355,9 @@ const PaymentSuccess = () => {
                                         status: 'CONFIRMED'
                                     },
                                     passenger: bookingData,
-                                    searchContext: location.state?.searchContext
+                                    searchContext: location.state?.searchContext,
+                                    flight: item,
+                                    type: type
                                 }
                             })}
                             disabled={saving}
