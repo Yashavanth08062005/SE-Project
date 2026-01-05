@@ -181,6 +181,7 @@ const PaymentSuccess = () => {
             }
 
             // Override with User Search Context if available (Prioritize User Intent)
+            const searchContext = location.state?.searchContext;
             if (searchContext) {
                 console.log('✨ Applying User Search Context to Booking:', searchContext);
                 if (searchContext.origin) origin = searchContext.origin;

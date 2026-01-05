@@ -1,18 +1,30 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Lock, Loader, AlertCircle } from 'lucide-react';
-import axios from 'axios';
+import { CreditCard, Lock, Loader, AlertCircle, Smartphone, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const PaymentPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { bookingData, item, type } = location.state || {};
+    const { bookingData, item, type, searchOrigin, searchDestination } = location.state || {};
 
     const [processing, setProcessing] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState('razorpay');
     const [error, setError] = useState('');
     const [scriptLoaded, setScriptLoaded] = useState(false);
+
+    // Card payment state
+    const [cardDetails, setCardDetails] = useState({
+        cardNumber: '',
+        cardHolder: '',
+        expiryMonth: '',
+        expiryYear: '',
+        cvv: ''
+    });
+
+    // UPI payment state
+    const [upiId, setUpiId] = useState('');
 
     useEffect(() => {
         if (!bookingData || !item) {
@@ -25,324 +37,86 @@ const PaymentPage = () => {
         script.src = 'https://checkout.razorpay.com/v1/checkout.js';
         script.async = true;
         script.onload = () => setScriptLoaded(true);
+        script.onerror = () => {
+            console.error('Failed to load Razorpay script');
+            setError('Failed to load payment gateway. Please refresh the page.');
+        };
         document.body.appendChild(script);
 
         return () => {
-            document.body.removeChild(script);
+            if (document.body.contains(script)) {
+                document.body.removeChild(script);
+            }
         };
     }, [bookingData, item, navigate]);
 
-    const confirmBooking = async (transactionId) => {
+    const simulatePayment = () => {
+        return new Promise((resolve) => {
+            // Simulate payment processing delay
+            setTimeout(() => {
+                resolve({ success: true, transactionId: `TXN${Date.now()}` });
+            }, 3000);
+        });
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+
+        // Format card number with spaces
+        if (name === 'cardNumber') {
+            const formatted = value.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim();
+            setCardDetails(prev => ({ ...prev, [name]: formatted }));
+        } else {
+            setCardDetails(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+    const handleCardPayment = async (e) => {
+        e.preventDefault();
+        setError('');
+        setProcessing(true);
+
         try {
-            const API_BASE_URL = import.meta.env.VITE_BAP_URL || 'http://localhost:8081';
+            // Validate card details
+            if (!cardDetails.cardNumber || cardDetails.cardNumber.replace(/\s/g, '').length !== 16) {
+                throw new Error('Please enter a valid 16-digit card number');
+            }
+            if (!cardDetails.cardHolder) {
+                throw new Error('Please enter card holder name');
+            }
+            if (!cardDetails.expiryMonth || !cardDetails.expiryYear) {
+                throw new Error('Please enter card expiry date');
+            }
+            if (!cardDetails.cvv || cardDetails.cvv.length !== 3) {
+                throw new Error('Please enter a valid 3-digit CVV');
+            }
 
-            // Create Beckn confirm request
-            const confirmRequest = {
-                context: {
-                    domain: (type === 'flight' || type === 'bus' || type === 'train') ? 'mobility' : 'hospitality',
-                    country: 'IND',
-                    city: 'std:080',
-                    action: 'confirm',
-                    core_version: '1.1.0',
-                    bap_id: 'travel-discovery-bap.example.com',
-                    bap_uri: API_BASE_URL,
-                    transaction_id: `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    message_id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    timestamp: new Date().toISOString(),
-                    ttl: 'PT30S'
-                },
-                message: {
-                    order: {
-                        id: `order-${Date.now()}`,
-                        state: 'CONFIRMED',
-                        provider: {
-                            id: item.providerId || 'provider-001'
-                        },
-                        items: [
-                            {
-                                id: item.id,
-                                quantity: {
-                                    count: 1
-                                }
-                            }
-                        ],
-                        billing: {
-                            name: bookingData.passenger_name,
-                            email: bookingData.passenger_email,
-                            phone: bookingData.passenger_phone,
-                            address: {
-                                door: bookingData.address_line1,
-                                building: bookingData.address_line2 || '',
-                                street: bookingData.address_line1,
-                                city: bookingData.city,
-                                state: bookingData.state,
-                                country: bookingData.country,
-                                area_code: bookingData.postal_code
-                            }
-                        },
-                        fulfillment: {
-                            type: 'DELIVERY',
-                            customer: {
-                                person: {
-                                    name: bookingData.passenger_name,
-                                    age: bookingData.passenger_age,
-                                    gender: bookingData.passenger_gender
-                                },
-                                contact: {
-                                    phone: bookingData.passenger_phone,
-                                    email: bookingData.passenger_email
-                                }
-                            }
-                        },
-                        payment: {
-                            type: 'PRE-FULFILLMENT',
-                            status: 'PAID',
-                            params: {
-                                amount: item.price.toString(),
-                                currency: item.currency || 'INR',
-                                transaction_id: transactionId
-                            }
-                        },
-                        quote: {
-                            price: {
-                                currency: item.currency || 'INR',
-                                value: item.price.toString()
-                            }
-                        }
-                    }
-                }
-            };
+            // Simulate payment processing
+            const paymentResult = await simulatePayment();
 
-            console.log('📤 Sending Beckn confirm request:', confirmRequest);
-
-            const response = await axios.post(`${API_BASE_URL}/beckn/confirm`, confirmRequest);
-
-            console.log('✅ Beckn confirm response:', response.data);
-
-            // Save booking to database API
-            try {
-                const bookingRef = `BK${Date.now().toString().slice(-8)}`;
-
-                // Robust Data Extraction (Unified with PaymentSuccess.jsx)
-                // Common fallbacks
-                let itemName = item.details?.name || item.name || item.descriptor?.name;
-                let itemCode = item.details?.code || item.code || item.id;
-                let origin = item.origin;
-                let destination = item.destination;
-                let departureTime = item.details?.departureTime || item.time?.range?.start || item.time?.timestamp;
-                let arrivalTime = item.details?.arrivalTime || item.time?.range?.end;
-
-                // Type-specific overrides
-                if (type === 'flight') {
-                    itemName = item.details?.airline || item.airline || itemName;
-                    itemCode = item.details?.flightNumber || item.flightNumber || itemCode;
-                    origin = item.details?.origin || item.origin || origin;
-                    destination = item.details?.destination || item.destination || destination;
-
-                } else if (type === 'hotel') {
-                    itemName = item.details?.hotelName || item.details?.name || item.hotel_name || itemName;
-                    itemCode = item.details?.hotelId || item.hotel_code || itemCode;
-                    origin = null;
-                    destination = item.details?.city || item.city || item.location?.city?.name || destination;
-
-                    if (!destination && item.details?.address) {
-                        const addr = item.details.address;
-                        if (typeof addr === 'string') destination = addr.split(',').pop().trim();
-                        else destination = addr.city || addr.state;
-                    }
-
-                } else if (type === 'bus') {
-                    itemName = item.details?.travels || item.details?.operator || item.travels || item.bus_operator || item.operator_name || itemName;
-                    origin = item.details?.departureCity || item.details?.source || item.details?.from || item.source || item.from || origin;
-                    destination = item.details?.arrivalCity || item.details?.destination || item.details?.to || item.destination || item.to || destination;
-                    departureTime = item.details?.departureTime || item.departure_time || item.time?.range?.start || item.timings?.departure || departureTime;
-                    arrivalTime = item.details?.arrivalTime || item.arrival_time || item.time?.range?.end || item.timings?.arrival || arrivalTime;
-
-                } else if (type === 'experience') {
-                    itemName = item.details?.title || item.details?.name || item.descriptor?.name || item.descriptor?.code || itemName;
-                    itemCode = item.id || item.descriptor?.code || itemCode;
-                    origin = null; // Experiences don't have an origin in the travel sense
-                    destination = item.details?.location || item.details?.address || item.city || item.location_id || destination;
-
-                    // Experience time handling
-                    departureTime = item.time?.range?.start || item.time?.timestamp || item.volume?.start_time || departureTime;
-                    arrivalTime = item.time?.range?.end || item.volume?.end_time || arrivalTime;
-
-                } else if (type === 'train') {
-                    itemName = item.details?.trainName || item.details?.name || item.train_name || item.trainName || itemName;
-                    itemCode = item.details?.trainNumber || item.train_number || itemCode;
-
-                    // Advanced Tag Parsing for Trains
-                    if (item.tags) {
-                        const routeTag = item.tags.find(tag => tag.code === 'ROUTE');
-                        if (routeTag) {
-                            const fromTag = routeTag.list.find(i => i.code === 'FROM');
-                            if (fromTag) {
-                                const val = fromTag.value;
-                                if (val.includes('SBC') || val.includes('Bengaluru')) origin = 'BLR';
-                                else if (val.includes('NZM') || val.includes('Delhi')) origin = 'DEL';
-                                else if (val.includes('MAS') || val.includes('Chennai')) origin = 'MAA';
-                                else if (val.includes('KCG') || val.includes('Hyderabad')) origin = 'HYD';
-                                else {
-                                    const match = val.match(/\(([^)]+)\)/);
-                                    origin = match ? match[1] : val.substring(0, 3).toUpperCase();
-                                }
-                            }
-                            const toTag = routeTag.list.find(i => i.code === 'TO');
-                            if (toTag) {
-                                const val = toTag.value;
-                                if (val.includes('SBC') || val.includes('Bengaluru')) destination = 'BLR';
-                                else if (val.includes('NZM') || val.includes('Delhi')) destination = 'DEL';
-                                else if (val.includes('MAS') || val.includes('Chennai')) destination = 'MAA';
-                                else if (val.includes('KCG') || val.includes('Hyderabad')) destination = 'HYD';
-                                else {
-                                    const match = val.match(/\(([^)]+)\)/);
-                                    destination = match ? match[1] : val.substring(0, 3).toUpperCase();
-                                }
-                            }
-                            const depTag = routeTag.list.find(i => i.code === 'DEPARTURE_TIME');
-                            if (depTag) departureTime = depTag.value;
-                            const arrTag = routeTag.list.find(i => i.code === 'ARRIVAL_TIME');
-                            if (arrTag) arrivalTime = arrTag.value;
-                        }
-                    }
-                    // Fallbacks logic for trains
-                    origin = origin || item.details?.fromStation || item.details?.source || item.details?.from || item.source || item.from;
-                    destination = destination || item.details?.toStation || item.details?.destination || item.details?.to || item.destination || item.to;
-
-                    departureTime = departureTime || item.details?.departureTime || item.departure_time || item.time?.range?.start || item.timings?.departure;
-                    arrivalTime = arrivalTime || item.details?.arrivalTime || item.arrival_time || item.time?.range?.end || item.timings?.arrival;
-                }
-
-                const bookingPayload = {
-                    booking_reference: bookingRef,
-                    user_id: user?.id || null,
-                    booking_type: type,
-                    item_id: item.id,
-                    provider_id: item.providerId || 'provider-001',
-                    item_name: itemName,
-                    item_code: itemCode,
-                    origin: origin,
-                    destination: destination,
-                    departure_time: departureTime,
-                    arrival_time: arrivalTime,
-                    check_in_date: type === 'hotel' ? (item.checkIn || item.details?.checkIn) : null,
-                    check_out_date: type === 'hotel' ? (item.checkOut || item.details?.checkOut) : null,
-                    passenger_name: bookingData.passenger_name,
-                    passenger_email: user?.email || bookingData.passenger_email,
-                    passenger_phone: bookingData.passenger_phone,
-                    passenger_gender: bookingData.passenger_gender,
-                    date_of_birth: bookingData.date_of_birth,
-                    nationality: bookingData.nationality,
-                    passport_number: bookingData.passport_number,
-                    address_line1: bookingData.address_line1,
-                    address_line2: bookingData.address_line2,
-                    city: bookingData.city,
-                    state: bookingData.state,
-                    postal_code: bookingData.postal_code,
-                    country: bookingData.country,
-                    transaction_id: transactionId,
-                    payment_method: 'razorpay',
-                    payment_status: 'PAID',
-                    amount: item.price,
-                    currency: item.currency || 'INR',
-                    booking_status: 'CONFIRMED',
-                    beckn_transaction_id: confirmRequest.context.transaction_id,
-                    beckn_message_id: confirmRequest.context.message_id,
-                    order_id: confirmRequest.message.order.id,
-                    item_details: item,
-                    booking_metadata: {
-                        payment_date: new Date().toISOString(),
-                        beckn_response: response.data
-                    }
-                };
-
-                // Override origin/destination from searchContext if available (to match user intent)
-                const searchContext = location.state?.searchContext;
-                if (searchContext) {
-                    if (searchContext.origin) bookingPayload.origin = searchContext.origin;
-                    if (searchContext.destination) bookingPayload.destination = searchContext.destination;
-
-
-                    // FIX: Use User's Selected Dates for Hotels
-                    if (type === 'hotel') {
-                        if (searchContext.checkInDate) {
-                            bookingPayload.check_in_date = searchContext.checkInDate;
-                            bookingPayload.departure_time = searchContext.checkInDate;
-                            // Update item for next page
-                            if (!item.details) item.details = {};
-                            item.details.checkIn = searchContext.checkInDate;
-                        }
-                        if (searchContext.checkOutDate) {
-                            bookingPayload.check_out_date = searchContext.checkOutDate;
-                            bookingPayload.arrival_time = searchContext.checkOutDate;
-                            // Update item for next page
-                            if (!item.details) item.details = {};
-                            item.details.checkOut = searchContext.checkOutDate;
-                        }
-                    }
-
-                    // FIX: Use User's Selected Date for Experiences
-                    if (type === 'experience' && searchContext.travelDate) {
-                        bookingPayload.departure_time = searchContext.travelDate;
-                        // For arrival/end time, if we successfully parsed duration (e.g. "3 hours"), we could calculate it.
-                        // For now, we just set start time which is the most critical.
-                        if (!item.details) item.details = {};
-                        item.details.departureTime = searchContext.travelDate;
-                    }
-                }
-
-                console.log('💾 Saving booking to database:', bookingPayload);
-
-                const bookingResponse = await axios.post(`${API_BASE_URL}/api/bookings`, bookingPayload);
-
-                console.log('✅ Booking saved successfully:', bookingResponse.data);
-
-                // Navigate to confirmation page
-                navigate('/booking-confirmation', {
+            if (paymentResult.success) {
+                // Navigate to payment success page
+                navigate('/payment-success', {
                     state: {
-                        booking: {
-                            id: bookingRef,
-                            transactionId: transactionId,
-                            status: 'CONFIRMED',
-                            paymentMethod: 'razorpay'
-                        },
-                        flight: {
-                            ...item,
-                            details: item.details
-                        },
-                        passenger: bookingData
+                        transactionId: paymentResult.transactionId,
+                        bookingData: bookingData,
+                        item: item,
+                        type: type,
+                        searchOrigin: searchOrigin,
+                        searchDestination: searchDestination
                     }
                 });
-
-            } catch (bookingError) {
-                console.error('❌ Error saving booking to database:', bookingError);
-                // Navigate anyway
-                navigate('/booking-confirmation', {
-                    state: {
-                        booking: {
-                            id: confirmRequest.message.order.id,
-                            transactionId: transactionId,
-                            status: 'CONFIRMED',
-                            paymentMethod: 'razorpay'
-                        },
-                        flight: {
-                            ...item,
-                            details: item.details
-                        },
-                        passenger: bookingData
-                    }
-                });
+            } else {
+                throw new Error('Payment failed. Please try again.');
             }
 
         } catch (err) {
-            console.error('❌ Beckn confirm error:', err);
-            setError('Failed to confirm booking. Please contact support.');
+            setError(err.message || 'Payment failed. Please try again.');
             setProcessing(false);
         }
     };
 
-    const handlePayment = () => {
+    const handleRazorpayPayment = () => {
         setProcessing(true);
         setError('');
 
@@ -352,74 +126,158 @@ const PaymentPage = () => {
             return;
         }
 
-        const options = {
-            key: "rzp_test_1DP5mmOlF5G5ag", // Standard Test Key for demo purposes
-            amount: (item.price * 100).toString(), // Razorpay expects amount in paise
-            currency: "INR",
-            description: `Payment for ${type} booking`,
-            image: "https://example.com/image/rzp.jpg", // Kept from snippet
-            prefill: {
-                email: bookingData.passenger_email,
-                contact: bookingData.passenger_phone,
-            },
-            config: {
-                display: {
-                    blocks: {
-                        utib: { //name for Axis block
-                            name: "Pay Using Axis Bank",
-                            instruments: [
-                                {
-                                    method: "card",
-                                    issuers: ["UTIB"]
-                                },
-                                {
-                                    method: "netbanking",
-                                    banks: ["UTIB"]
-                                },
-                            ]
-                        },
-                        other: { //  name for other block
-                            name: "Other Payment Methods",
-                            instruments: [
-                                {
-                                    method: "card",
-                                    issuers: ["ICIC"]
-                                },
-                                {
-                                    method: 'netbanking',
-                                }
-                            ]
+        const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+        if (!razorpayKey) {
+            console.error('Razorpay key is missing! Check .env file.');
+            setError('Payment configuration missing. Please restart the app.');
+            setProcessing(false);
+            return;
+        }
+
+        try {
+            const options = {
+                key: razorpayKey,
+                amount: (item.price * 100).toString(), // Razorpay expects amount in paise
+                currency: "INR",
+                name: "TravelHub",
+                description: `Payment for ${type} booking`,
+                prefill: {
+                    name: bookingData.passenger_name,
+                    email: bookingData.passenger_email,
+                    contact: bookingData.passenger_phone,
+                },
+                theme: {
+                    color: "#2563eb"
+                },
+                handler: function (response) {
+                    console.log('Razorpay payment successful:', response.razorpay_payment_id);
+                    
+                    // Navigate to payment success page
+                    navigate('/payment-success', {
+                        state: {
+                            transactionId: response.razorpay_payment_id,
+                            bookingData: bookingData,
+                            item: item,
+                            type: type,
+                            searchOrigin: searchOrigin,
+                            searchDestination: searchDestination
                         }
-                    },
-                    hide: [
-                        {
-                            method: "upi"
-                        }
-                    ],
-                    sequence: ["block.utib", "block.other"],
-                    preferences: {
-                        show_default_blocks: false
+                    });
+                },
+                modal: {
+                    ondismiss: function () {
+                        setProcessing(false);
                     }
                 }
-            },
-            handler: function (response) {
-                console.log('Razorpay Payment ID:', response.razorpay_payment_id);
-                confirmBooking(response.razorpay_payment_id);
-            },
-            modal: {
-                ondismiss: function () {
-                    setProcessing(false);
-                    console.log("Checkout form closed by the user");
-                }
-            }
-        };
+            };
 
-        const rzp1 = new window.Razorpay(options);
-        rzp1.on('payment.failed', function (response) {
-            setError(response.error.description);
+            const rzp1 = new window.Razorpay(options);
+            rzp1.on('payment.failed', function (response) {
+                setError(response.error.description || 'Payment failed. Please try again.');
+                setProcessing(false);
+            });
+            rzp1.open();
+        } catch (err) {
+            console.error('Razorpay initialization failed:', err);
+            setError('Failed to initialize payment. Please try again.');
             setProcessing(false);
-        });
-        rzp1.open();
+        }
+    };
+
+    const handlePayPalPayment = async () => {
+        setProcessing(true);
+        setError('');
+
+        try {
+            // Simulate PayPal payment processing
+            const paymentResult = await simulatePayment();
+
+            if (paymentResult.success) {
+                // Navigate to payment success page
+                navigate('/payment-success', {
+                    state: {
+                        transactionId: paymentResult.transactionId,
+                        bookingData: bookingData,
+                        item: item,
+                        type: type,
+                        searchOrigin: searchOrigin,
+                        searchDestination: searchDestination
+                    }
+                });
+            } else {
+                throw new Error('PayPal payment failed. Please try again.');
+            }
+
+        } catch (err) {
+            setError(err.message || 'PayPal payment failed. Please try again.');
+            setProcessing(false);
+        }
+    };
+
+    const handleUpiPayment = async (e) => {
+        e.preventDefault();
+        setError('');
+        setProcessing(true);
+
+        try {
+            // Validate UPI ID
+            if (!upiId || !upiId.includes('@')) {
+                throw new Error('Please enter a valid UPI ID');
+            }
+
+            // Simulate UPI payment processing
+            const paymentResult = await simulatePayment();
+
+            if (paymentResult.success) {
+                // Navigate to payment success page
+                navigate('/payment-success', {
+                    state: {
+                        transactionId: paymentResult.transactionId,
+                        bookingData: bookingData,
+                        item: item,
+                        type: type,
+                        searchOrigin: searchOrigin,
+                        searchDestination: searchDestination
+                    }
+                });
+            } else {
+                throw new Error('UPI payment failed. Please try again.');
+            }
+
+        } catch (err) {
+            setError(err.message || 'UPI payment failed. Please try again.');
+            setProcessing(false);
+        }
+    };
+
+    const handleWalletPayment = async (walletType) => {
+        setProcessing(true);
+        setError('');
+
+        try {
+            // Simulate wallet payment processing
+            const paymentResult = await simulatePayment();
+
+            if (paymentResult.success) {
+                // Navigate to payment success page
+                navigate('/payment-success', {
+                    state: {
+                        transactionId: paymentResult.transactionId,
+                        bookingData: bookingData,
+                        item: item,
+                        type: type,
+                        searchOrigin: searchOrigin,
+                        searchDestination: searchDestination
+                    }
+                });
+            } else {
+                throw new Error(`${walletType} payment failed. Please try again.`);
+            }
+
+        } catch (err) {
+            setError(err.message || 'Wallet payment failed. Please try again.');
+            setProcessing(false);
+        }
     };
 
     if (!bookingData || !item) {
@@ -430,7 +288,7 @@ const PaymentPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md mx-auto">
+            <div className="max-w-2xl mx-auto">
                 <div className="mb-6 text-center">
                     <h1 className="text-3xl font-bold text-gray-900">Payment</h1>
                     <p className="text-gray-600 mt-2">Complete your booking for ₹{totalAmount.toLocaleString('en-IN')}</p>
@@ -441,7 +299,7 @@ const PaymentPage = () => {
                     <div className="flex items-center justify-center mb-6 p-4 bg-green-50 rounded-lg">
                         <Lock className="h-5 w-5 text-green-600 mr-2" />
                         <span className="text-sm text-green-800 font-medium">
-                            Secure Payment with Razorpay
+                            Secure Payment Gateway
                         </span>
                     </div>
 
@@ -452,26 +310,255 @@ const PaymentPage = () => {
                         </div>
                     )}
 
-                    <div className="flex flex-col space-y-4">
-                        <button
-                            id="rzp-button1"
-                            onClick={handlePayment}
-                            disabled={!scriptLoaded || processing}
-                            className="bg-blue-600 text-white rounded-lg py-4 px-6 font-bold text-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg transform active:scale-95 duration-200"
-                        >
-                            {processing ? (
-                                <>
-                                    <Loader className="animate-spin h-6 w-6 mr-3" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <i className="fas fa-money-bill mr-3"></i>
-                                    Own Checkout
-                                </>
-                            )}
-                        </button>
+                    {/* Payment Method Selection */}
+                    <div className="mb-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Payment Method</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button
+                                onClick={() => setPaymentMethod('razorpay')}
+                                className={`p-4 border-2 rounded-lg flex items-center justify-center ${
+                                    paymentMethod === 'razorpay' 
+                                        ? 'border-blue-500 bg-blue-50' 
+                                        : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                            >
+                                <CreditCard className="h-5 w-5 mr-2" />
+                                Razorpay (All Methods)
+                            </button>
+                            <button
+                                onClick={() => setPaymentMethod('card')}
+                                className={`p-4 border-2 rounded-lg flex items-center justify-center ${
+                                    paymentMethod === 'card' 
+                                        ? 'border-blue-500 bg-blue-50' 
+                                        : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                            >
+                                <CreditCard className="h-5 w-5 mr-2" />
+                                Credit/Debit Card
+                            </button>
+                            <button
+                                onClick={() => setPaymentMethod('upi')}
+                                className={`p-4 border-2 rounded-lg flex items-center justify-center ${
+                                    paymentMethod === 'upi' 
+                                        ? 'border-blue-500 bg-blue-50' 
+                                        : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                            >
+                                <Smartphone className="h-5 w-5 mr-2" />
+                                UPI
+                            </button>
+                            <button
+                                onClick={() => setPaymentMethod('paypal')}
+                                className={`p-4 border-2 rounded-lg flex items-center justify-center ${
+                                    paymentMethod === 'paypal' 
+                                        ? 'border-blue-500 bg-blue-50' 
+                                        : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                            >
+                                <Wallet className="h-5 w-5 mr-2" />
+                                PayPal (Demo)
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Payment Forms */}
+                    {paymentMethod === 'card' && (
+                        <form onSubmit={handleCardPayment} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Card Number
+                                </label>
+                                <input
+                                    type="text"
+                                    name="cardNumber"
+                                    value={cardDetails.cardNumber}
+                                    onChange={handleInputChange}
+                                    placeholder="1234 5678 9012 3456"
+                                    maxLength="19"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Card Holder Name
+                                </label>
+                                <input
+                                    type="text"
+                                    name="cardHolder"
+                                    value={cardDetails.cardHolder}
+                                    onChange={handleInputChange}
+                                    placeholder="John Doe"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Month
+                                    </label>
+                                    <select
+                                        name="expiryMonth"
+                                        value={cardDetails.expiryMonth}
+                                        onChange={handleInputChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    >
+                                        <option value="">MM</option>
+                                        {Array.from({ length: 12 }, (_, i) => (
+                                            <option key={i + 1} value={String(i + 1).padStart(2, '0')}>
+                                                {String(i + 1).padStart(2, '0')}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Year
+                                    </label>
+                                    <select
+                                        name="expiryYear"
+                                        value={cardDetails.expiryYear}
+                                        onChange={handleInputChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    >
+                                        <option value="">YY</option>
+                                        {Array.from({ length: 10 }, (_, i) => (
+                                            <option key={i} value={String(new Date().getFullYear() + i).slice(-2)}>
+                                                {String(new Date().getFullYear() + i).slice(-2)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        CVV
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="cvv"
+                                        value={cardDetails.cvv}
+                                        onChange={handleInputChange}
+                                        placeholder="123"
+                                        maxLength="3"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="w-full bg-blue-600 text-white rounded-lg py-3 px-6 font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                            >
+                                {processing ? (
+                                    <>
+                                        <Loader className="animate-spin h-5 w-5 mr-2" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    `Pay ₹${totalAmount.toLocaleString('en-IN')}`
+                                )}
+                            </button>
+                        </form>
+                    )}
+
+                    {paymentMethod === 'upi' && (
+                        <form onSubmit={handleUpiPayment} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    UPI ID
+                                </label>
+                                <input
+                                    type="text"
+                                    value={upiId}
+                                    onChange={(e) => setUpiId(e.target.value)}
+                                    placeholder="yourname@paytm"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="w-full bg-blue-600 text-white rounded-lg py-3 px-6 font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                            >
+                                {processing ? (
+                                    <>
+                                        <Loader className="animate-spin h-5 w-5 mr-2" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    `Pay ₹${totalAmount.toLocaleString('en-IN')}`
+                                )}
+                            </button>
+                        </form>
+                    )}
+
+                    {paymentMethod === 'razorpay' && (
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600">
+                                Razorpay supports all payment methods including UPI, Cards, Net Banking, and Wallets.
+                            </p>
+                            <button
+                                onClick={handleRazorpayPayment}
+                                disabled={!scriptLoaded || processing}
+                                className="w-full bg-blue-600 text-white rounded-lg py-3 px-6 font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                            >
+                                {processing ? (
+                                    <>
+                                        <Loader className="animate-spin h-5 w-5 mr-2" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    `Pay ₹${totalAmount.toLocaleString('en-IN')} with Razorpay`
+                                )}
+                            </button>
+                        </div>
+                    )}
+
+                    {paymentMethod === 'paypal' && (
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600">
+                                PayPal payment simulation (Demo mode only)
+                            </p>
+                            <button
+                                onClick={handlePayPalPayment}
+                                disabled={processing}
+                                className="w-full bg-yellow-500 text-white rounded-lg py-3 px-6 font-semibold hover:bg-yellow-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                            >
+                                {processing ? (
+                                    <>
+                                        <Loader className="animate-spin h-5 w-5 mr-2" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    `Pay $${(totalAmount / 83).toFixed(2)} with PayPal`
+                                )}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Wallet Options */}
+                    {paymentMethod === 'wallet' && (
+                        <div className="space-y-4">
+                            <h4 className="text-md font-medium text-gray-900">Choose Wallet</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                {['Paytm', 'PhonePe', 'Google Pay', 'Amazon Pay'].map((wallet) => (
+                                    <button
+                                        key={wallet}
+                                        onClick={() => handleWalletPayment(wallet)}
+                                        disabled={processing}
+                                        className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                    >
+                                        {wallet}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-6 text-center">
                         <p className="text-xs text-gray-400">
