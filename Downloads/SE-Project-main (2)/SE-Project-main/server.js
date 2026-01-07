@@ -115,10 +115,11 @@ app.post('/api/state/save', async (req, res) => {
 
         // clear old data
         await db.query('DELETE FROM skills WHERE user_id=$1', [userId]);
-        await db.query('DELETE FROM peers WHERE user_id=$1', [userId]);
-        await db.query('DELETE FROM resources WHERE user_id=$1', [userId]);
+        // DO NOT delete peers/skills for peers here anymore. Source of truth is now server-managed for peers.
+        // await db.query('DELETE FROM peers WHERE user_id=$1', [userId]);
 
         // save skills
+        await db.query('DELETE FROM skills WHERE user_id=$1', [userId]);
         for (const s of mySkills) {
             const skillName = typeof s === 'object' ? s.skill : s;
             const skillCompany = typeof s === 'object' ? s.company : "";
@@ -126,7 +127,8 @@ app.post('/api/state/save', async (req, res) => {
         }
         console.log("[Server] Skills saved.");
 
-        // save peers
+        // Peers are now managed via request/accept flow. We do NOT update them from client snapshot.
+        /*
         for (const peer of peers) {
             const peerRes = await db.query(
                 'INSERT INTO peers (user_id, name, company, linked_user_id) VALUES ($1,$2,$3,$4) RETURNING id',
@@ -140,7 +142,7 @@ app.post('/api/state/save', async (req, res) => {
                 await db.query('INSERT INTO peer_skills (peer_id, skill, company) VALUES ($1,$2,$3)', [peerId, skillName, skillCompany]);
             }
         }
-        console.log("[Server] Peers saved.");
+        */
 
         // save resources
         if (resources && Array.isArray(resources)) {
@@ -195,10 +197,23 @@ app.get('/api/state/:userId', async (req, res) => {
         const peerIdMap = new Map(); // Map linked_user_id -> peer array index
 
         for (const [index, peer] of peersRes.rows.entries()) {
-            const skillRes = await db.query(
-                'SELECT skill, company FROM peer_skills WHERE peer_id=$1',
-                [peer.id]
-            );
+            let skillRows = [];
+
+            if (peer.linked_user_id) {
+                // Fetch REAL skills from the linked user
+                const skillRes = await db.query(
+                    'SELECT skill, company FROM skills WHERE user_id=$1',
+                    [peer.linked_user_id]
+                );
+                skillRows = skillRes.rows;
+            } else {
+                // Fallback to static peer_skills (if any)
+                const skillRes = await db.query(
+                    'SELECT skill, company FROM peer_skills WHERE peer_id=$1',
+                    [peer.id]
+                );
+                skillRows = skillRes.rows;
+            }
 
             if (peer.linked_user_id) {
                 linkedIds.push(peer.linked_user_id);
@@ -206,9 +221,10 @@ app.get('/api/state/:userId', async (req, res) => {
             }
 
             peers.push({
+                id: peer.id, // Include ID for removal
                 name: peer.name,
                 company: peer.company,
-                skills: skillRes.rows, // object {skill, company}
+                skills: skillRows, // object {skill, company}
                 linkedId: peer.linked_user_id
             });
         }
@@ -304,6 +320,177 @@ app.get('/api/users/search', async (req, res) => {
         res.status(500).json({ error: "Search failed" });
     }
 });
+
+/* =========================
+   PEER REQUESTS
+========================= */
+app.post('/api/peers/request', async (req, res) => {
+    const { senderId, receiverEmail } = req.body;
+
+    try {
+        if (!senderId || !receiverEmail)
+            return res.status(400).json({ error: "Missing senderId or receiverEmail" });
+
+        // Find receiver
+        const userRes = await db.query(
+            'SELECT id, username FROM users WHERE LOWER(username) = LOWER($1)',
+            [receiverEmail]
+        );
+
+        if (userRes.rows.length === 0)
+            return res.status(404).json({ error: "User not found" });
+
+        const receiverId = userRes.rows[0].id;
+
+        if (Number(senderId) === Number(receiverId))
+            return res.status(400).json({ error: "Cannot add yourself" });
+
+        // Check if already peers
+        const peerCheck = await db.query(
+            'SELECT id FROM peers WHERE user_id=$1 AND linked_user_id=$2',
+            [senderId, receiverId]
+        );
+        if (peerCheck.rows.length > 0)
+            return res.status(400).json({ error: "Already peers" });
+
+        // Check if pending request exists
+        const reqCheck = await db.query(
+            'SELECT id, status FROM peer_requests WHERE sender_id=$1 AND receiver_id=$2 AND status=\'pending\'',
+            [senderId, receiverId]
+        );
+        if (reqCheck.rows.length > 0)
+            return res.status(400).json({ error: "Request already pending" });
+
+        // Check if they sent US a request (could auto-accept? For now just block)
+        const reverseCheck = await db.query(
+            'SELECT id FROM peer_requests WHERE sender_id=$2 AND receiver_id=$1 AND status=\'pending\'',
+            [senderId, receiverId]
+        );
+        if (reverseCheck.rows.length > 0)
+            return res.status(400).json({ error: "They already sent you a request. Check your pending requests." });
+
+        // Create Request
+        await db.query(
+            'INSERT INTO peer_requests (sender_id, receiver_id) VALUES ($1, $2)',
+            [senderId, receiverId]
+        );
+
+        res.json({ success: true, message: "Request sent" });
+    } catch (err) {
+        console.error("❌ Peer Request Error:", err.message);
+        res.status(500).json({ error: "Request failed" });
+    }
+});
+
+app.get('/api/peers/requests/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const result = await db.query(`
+            SELECT pr.id, u.username as email, u.name, u.company 
+            FROM peer_requests pr
+            JOIN users u ON pr.sender_id = u.id
+            WHERE pr.receiver_id = $1 AND pr.status = 'pending'
+        `, [userId]);
+
+        // Parse company just in case (though it's usually JSON string or string)
+        const requests = result.rows.map(r => {
+            let comps = [];
+            try { comps = JSON.parse(r.company); } catch (e) { if (r.company) comps = [r.company]; }
+            return { ...r, company: comps };
+        });
+
+        res.json(requests);
+    } catch (err) {
+        console.error("❌ Get Requests Error:", err.message);
+        res.status(500).json({ error: "Failed to fetch requests" });
+    }
+});
+
+app.post('/api/peers/respond', async (req, res) => {
+    const { requestId, action } = req.body; // action: 'accept' or 'reject'
+    if (!['accept', 'reject'].includes(action))
+        return res.status(400).json({ error: "Invalid action" });
+
+    try {
+        const reqRes = await db.query('SELECT * FROM peer_requests WHERE id=$1', [requestId]);
+        if (reqRes.rows.length === 0)
+            return res.status(404).json({ error: "Request not found" });
+
+        const request = reqRes.rows[0];
+        if (request.status !== 'pending')
+            return res.status(400).json({ error: "Request already processed" });
+
+        if (action === 'reject') {
+            await db.query('UPDATE peer_requests SET status=\'rejected\' WHERE id=$1', [requestId]);
+            return res.json({ success: true, message: "Request rejected" });
+        }
+
+        // AUTO ACCEPT
+        await db.query('UPDATE peer_requests SET status=\'accepted\' WHERE id=$1', [requestId]);
+
+        // Insert into PEERS (Bidirectional)
+        const u1 = request.sender_id;
+        const u2 = request.receiver_id;
+
+        // Get profiles to populate initial name/company in peers table (as snapshot or ref)
+        // Actually, we should pull fresh data.
+        const users = await db.query('SELECT id, name, company, username FROM users WHERE id IN ($1, $2)', [u1, u2]);
+        const user1 = users.rows.find(u => u.id === u1); // Sender
+        const user2 = users.rows.find(u => u.id === u2); // Receiver
+
+        // Add U1 -> U2
+        await db.query(
+            'INSERT INTO peers (user_id, linked_user_id, name, company) VALUES ($1, $2, $3, $4)',
+            [u1, u2, user2.name || user2.username, user2.company]
+        );
+
+        // Add U2 -> U1
+        await db.query(
+            'INSERT INTO peers (user_id, linked_user_id, name, company) VALUES ($1, $2, $3, $4)',
+            [u2, u1, user1.name || user1.username, user1.company]
+        );
+
+        // Note: We are NOT populating peer_skills here. 
+        // The `loadState` logic already fetches live skills if linked_user_id exists.
+        // See: const skillRes = await db.query('SELECT skill, company FROM skills WHERE user_id=$1 ...') in loadState for linked peers?
+        // Wait, current loadState logic checks peer_skills table.
+        // I should probably also populate peer_skills OR update loadState to fetch from real skills table if linked.
+        // Let's UPDATE loadState to be smarter. 
+
+        res.json({ success: true, message: "Request accepted" });
+
+    } catch (err) {
+        console.error("❌ Respond Request Error:", err.message);
+        res.status(500).json({ error: "Action failed" });
+    }
+});
+
+app.post('/api/peers/remove', async (req, res) => {
+    const { userId, peerId } = req.body;
+    try {
+        // We need to remove the link in both directions...
+        // First find who the peer is.
+        // The peerId passed is the ID in the 'peers' table.
+        const pRes = await db.query('SELECT linked_user_id FROM peers WHERE id=$1 AND user_id=$2', [peerId, userId]);
+        if (pRes.rows.length === 0) return res.status(404).json({ error: "Peer not found" });
+
+        const linkedId = pRes.rows[0].linked_user_id;
+
+        // Remove my entry
+        await db.query('DELETE FROM peers WHERE id=$1', [peerId]);
+
+        // Remove their entry (if it exists)
+        if (linkedId) {
+            await db.query('DELETE FROM peers WHERE user_id=$1 AND linked_user_id=$2', [linkedId, userId]);
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("❌ Remove Peer Error:", err.message);
+        res.status(500).json({ error: "Remove failed" });
+    }
+});
+
 
 app.get('/api/debug/users', async (req, res) => {
     try {

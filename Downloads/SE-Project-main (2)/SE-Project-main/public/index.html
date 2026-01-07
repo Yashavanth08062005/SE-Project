@@ -21,15 +21,14 @@
         <h1>Peer Skill Insights</h1>
       </div>
 
-        <button data-page="dashboard" class="nav-btn active">Dashboard</button>
-        <button data-page="myskills" class="nav-btn">My Skills</button>
-        <button data-page="skillgap" class="nav-btn">Skill Gap</button>
-        <button data-page="peers" class="nav-btn">Peers</button>
-        <button data-page="internships" class="nav-btn">Internships</button>
-        <!-- Resource Recommendations button removed from here -->
-        <button data-page="profile" class="nav-btn">Profile</button>
-        <button id="logoutBtn" class="nav-btn"
-          style="margin-left:auto; background:rgba(255,255,255,0.1)">Logout</button>
+      <button data-page="dashboard" class="nav-btn active">Dashboard</button>
+      <button data-page="myskills" class="nav-btn">My Skills</button>
+      <button data-page="skillgap" class="nav-btn">Skill Gap</button>
+      <button data-page="peers" class="nav-btn">Peers</button>
+      <button data-page="internships" class="nav-btn">Internships</button>
+      <!-- Resource Recommendations button removed from here -->
+      <button data-page="profile" class="nav-btn">Profile</button>
+      <button id="logoutBtn" class="nav-btn" style="margin-left:auto; background:rgba(255,255,255,0.1)">Logout</button>
       </nav>
 
       <!-- removed extra Resources button per request -->
@@ -100,7 +99,8 @@
 
                 <div style="margin-top:10px">
                   <button id="updateDetailsBtn" class="action">Update Details</button>
-                  <button id="globalRecommendBtn" class="action secondary" style="margin-left:8px">Recommend Resource</button>
+                  <button id="globalRecommendBtn" class="action secondary" style="margin-left:8px">Recommend
+                    Resource</button>
                 </div>
               </form>
               <div style="margin-top:24px">
@@ -153,6 +153,11 @@
                   peer list. Their company and skills will be fetched automatically.</div>
               </form>
             </div>
+          </div>
+
+          <div class="card" id="pendingRequestsCard" style="display:none; border:1px solid #93c5fd; background:#eff6ff">
+            <h3>Pending Requests</h3>
+            <div id="pendingRequestsList" style="display:flex; flex-direction:column; gap:8px"></div>
           </div>
 
           <div class="card">
